@@ -4,6 +4,8 @@ English | [简体中文](README.zh-CN.md)
 
 Prompts for running long, complex, objectively verifiable tasks with a Master Agent that keeps dispatching Workers until every success criterion is independently verified.
 
+Inspired by [lidangzzz/goal-driven](https://github.com/lidangzzz/goal-driven).
+
 ```text
 while (criteria not met)
 {
@@ -124,3 +126,7 @@ If a baseline uncommitted change touches a file the task also changed, `git swit
 ```
 
 Everything lives inside `.git/`, so it is never tracked or committed. One branch maps to one task directory; a new Goal always gets a new one.
+
+## Acknowledgments
+
+This project is inspired by [lidangzzz/goal-driven](https://github.com/lidangzzz/goal-driven), which introduced the Goal-Driven approach: a Goal, strict Criteria for success, and a Master Agent that keeps a subagent working until the Criteria are met. Many thanks to its author for the idea.

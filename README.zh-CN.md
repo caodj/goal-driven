@@ -4,6 +4,8 @@
 
 一套提示词，用于执行耗时长、复杂、但成功与否可以客观验证的任务。Master Agent 不断派发 Worker，直到每一条成功标准都经过它的独立验证。
 
+本项目受 [lidangzzz/goal-driven](https://github.com/lidangzzz/goal-driven) 启发。
+
 ```text
 while (criteria not met)
 {
@@ -124,3 +126,7 @@ git branch -D goal-driven/<任务名>    # 这一串里的每个分支
 ```
 
 这些文件都在 `.git/` 里，不会被 git 追踪或提交。一个分支对应一个任务目录，新的 Goal 一定会用新目录。
+
+## 致谢
+
+本项目受 [lidangzzz/goal-driven](https://github.com/lidangzzz/goal-driven) 启发。该项目提出了 Goal-Driven 方法：一个目标（Goal）、一套严格的成功标准（Criteria），以及一个持续驱动子智能体工作、直到标准满足为止的 Master Agent。衷心感谢原作者的思路。
