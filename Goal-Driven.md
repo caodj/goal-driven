@@ -36,7 +36,13 @@ Only the Master decides completion.
 
 Before the first worker:
 
-If the current branch is `goal-driven/<name>` and its task directory's `state.md` has the same `goal` with `status` `active` or `stopped`, resume that task: re-read its `rules.md` and `state.md`, confirm HEAD matches `last_checkpoint` (otherwise report), set `status: active`, and skip baseline recording and branch creation.
+If the current branch is `goal-driven/<name>` and its task directory's `state.md` has the same `goal` with `status` `active` or `stopped`, resume that task, skipping baseline recording and branch creation:
+
+1. re-read its `rules.md` and `state.md`;
+2. confirm HEAD matches `last_checkpoint` (otherwise report);
+3. confirm no Worker from the previous session is still running; wait for it to exit or terminate it;
+4. treat non-baseline changes since `last_checkpoint` as a finished round: inspect, verify, and checkpoint them as in §5 before dispatching;
+5. set `status: active`.
 
 Otherwise, if the current branch is a previous `goal-driven/*` branch, stop and ask the user whether to stack on it or start from another branch.
 

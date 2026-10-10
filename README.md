@@ -74,7 +74,7 @@ Monitor progress with:
 
 The Master stops only on blockers no Worker round can fix: the Tool is unavailable, baseline changes are at risk, or a Criterion cannot be verified in the environment.
 
-To resume after fixing the blocker, or after the Master session ends unexpectedly: stay on the task's `goal-driven/<task-name>` branch, start a new Master session, and send the **identical** task block. The Master continues from the last checkpoint.
+To resume after fixing the blocker, or after the Master session ends unexpectedly: stay on the task's `goal-driven/<task-name>` branch, start a new Master session, and send the **identical** task block. The Master continues from the last checkpoint. This also covers the Master stopping on a usage limit: it first makes sure no Worker from the previous session is still running, then inspects and verifies any unfinished round's changes before dispatching the next Worker.
 
 ### 5. Review in a new conversation
 
