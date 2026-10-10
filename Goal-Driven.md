@@ -43,7 +43,7 @@ git status --short
 git diff
 ```
 
-Record this baseline in `.git/goal-driven/`.
+Record this baseline in `.git/goal-driven/`, and copy these rules to `.git/goal-driven/rules.md`.
 
 Create a dedicated working branch from the current HEAD; pre-existing uncommitted changes carry over untouched:
 
@@ -84,13 +84,13 @@ failed_approaches
 
 The Master may expand `candidate_paths` when the task requires it; record the reason in the state file.
 
-After context loss, restore state from this file and repository evidence, never from memory or worker reports.
+After context loss, re-read `rules.md`, then restore state from `state.md` and repository evidence, never from memory or worker reports.
 
 ---
 
 ## 3. Worker Launch
 
-Use only the Tool requested by the user. It overrides repository default worker tools.
+Use only the Tool requested by the user; it overrides repository default worker tools. If it is unavailable, stop and report; do not substitute.
 
 ### agy
 
@@ -120,6 +120,7 @@ agent --model grok-4.7-xhigh --force --print --output-format text -p "<详细指
 2. **Direct Invocation**
    - Invoke the selected Worker CLI directly; its exit code and output must reach the Master unaltered.
    - Allowed: native process management for timeouts, output redirection to a log file, reading the prompt from a file.
+   - Redirect Worker output to `.git/goal-driven/logs/round-<N>-worker.log`; read only its final report.
    - Workers must not launch other agents (enforced via the Worker Prompt).
 
 3. **Fresh Context**
@@ -137,9 +138,6 @@ agent --model grok-4.7-xhigh --force --print --output-format text -p "<详细指
    - On timeout or failure, inspect changes before retrying: keep in-scope partial work; revert only out-of-scope task hunks, never baseline changes.
    - Lack of progress is never a reason to stop. When rounds stop making measurable progress, escalate: record the approach in `failed_approaches`, gather more evidence, decompose the problem into a smaller sub-task, or require a fundamentally different approach.
    - Stop and report only when blocked by something no Worker round can resolve: the selected tool is unavailable, baseline changes are at risk (rule 4), or a Criterion cannot be verified in the available environment.
-
-6. **Tool Selection**
-   - See §3. If the selected tool is unavailable, stop and report; do not substitute.
 
 ---
 
@@ -204,7 +202,7 @@ git diff --stat
 git diff
 ```
 
-Because HEAD is the last checkpoint, this shows only the current round's changes plus the unchanged baseline changes.
+Because HEAD is the last checkpoint, this shows only the current round's changes plus the unchanged baseline changes. Read large diffs file by file (`git diff -- <path>`).
 
 Reject changes that:
 
@@ -227,7 +225,7 @@ Reject unjustified:
 * changed fixtures merely to accept wrong output;
 * disabled warnings, lint, sanitizers, or checks.
 
-Then independently run the verification for every Criterion, including those already marked `PASS`. Move any regressed Criterion back to `unmet_criteria`.
+Then independently run the verification for every Criterion, including those already marked `PASS`. Move any regressed Criterion back to `unmet_criteria`. Redirect verification output to `.git/goal-driven/logs/round-<N>-verify.log`; read only failures and summaries.
 
 Only the Master may mark a Criterion `PASS`.
 
@@ -237,8 +235,6 @@ If a Criterion fails:
 2. identify the smallest remaining problem;
 3. dispatch a fresh worker with that evidence;
 4. verify again.
-
-If the same approach repeatedly fails, record it in `failed_approaches` and require a different approach.
 
 ### Checkpoint
 
@@ -291,18 +287,7 @@ After all Criteria pass:
 * do not clean up unrelated existing code;
 * verify required documentation synchronization according to repository rules.
 
-If simplification changes code, rerun the complete verification chain.
-
-Before commit:
-
-```bash
-git status --short
-git diff --cached --stat
-git diff --cached
-git diff
-```
-
-Run the complete final verification against the exact result being committed.
+Before commit, inspect the staged diff as in §6, and run the complete final verification against the exact result being committed.
 
 Stage and commit only task-owned changes as the final commit on the working branch. Do not merge it; leave merging or squashing to the user.
 
