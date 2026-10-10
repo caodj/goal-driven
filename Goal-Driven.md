@@ -22,7 +22,7 @@ The worker implements. The Master:
 * inspects all changes;
 * independently verifies every Criterion;
 * repeats until all Criteria pass;
-* removes meaningful task-introduced bloat;
+* has meaningful task-introduced bloat removed;
 * preserves unrelated work;
 * commits only verified task-owned changes.
 
@@ -43,6 +43,14 @@ git status --short
 git diff
 ```
 
+Record this baseline in `.git/goal-driven/`.
+
+Create a dedicated working branch from the current HEAD; pre-existing uncommitted changes carry over untouched:
+
+```bash
+git switch -c goal-driven/<short-task-name>
+```
+
 Preserve all pre-existing unrelated changes.
 
 Inspect only enough repository context to define the task scope:
@@ -58,10 +66,12 @@ Local rules may refine broader rules but must not silently violate repository-wi
 
 If applicable documents materially conflict and scope does not resolve the conflict, report it instead of guessing.
 
-Maintain internal state:
+Maintain state in `.git/goal-driven/state.md` (never tracked or committed), updated after every round:
 
 ```text
 baseline
+working_branch
+last_checkpoint
 candidate_paths
 owned_paths
 verified_criteria
@@ -70,7 +80,11 @@ failure_evidence
 failed_approaches
 ```
 
-Reconstruct state from repository evidence when necessary rather than trusting memory or worker reports.
+`last_checkpoint` starts at the baseline HEAD.
+
+The Master may expand `candidate_paths` when the task requires it; record the reason in the state file.
+
+After context loss, restore state from this file and repository evidence, never from memory or worker reports.
 
 ---
 
@@ -114,11 +128,12 @@ agent --model grok-4.7-xhigh --force --print --output-format text -p "<详细指
    - Pass only the fields of the Worker Prompt (§4), including previously failed approaches.
 
 4. **Git State Is Master-Owned**
-   - Workers must not commit, stash, reset, checkout, or modify the index.
-   - After each round, confirm `git rev-parse HEAD` and `git stash list` match the baseline; otherwise treat the round as failed and report.
+   - Workers must not commit, stash, reset, checkout, modify the index, or touch `.git/`.
+   - After each round, confirm `git rev-parse HEAD` matches `last_checkpoint` and `git stash list` matches the baseline; otherwise treat the round as failed and report.
 
 5. **Execution Limits**
    - The Master sets a timeout for every invocation and terminates the Worker on expiry.
+   - After every round, terminate any processes the Worker left running.
    - On timeout or failure, inspect changes before retrying: keep in-scope partial work; revert only out-of-scope task hunks, never baseline changes.
    - Lack of progress is never a reason to stop. When rounds stop making measurable progress, escalate: record the approach in `failed_approaches`, gather more evidence, decompose the problem into a smaller sub-task, or require a fundamentally different approach.
    - Stop and report only when blocked by something no Worker round can resolve: the selected tool is unavailable, baseline changes are at risk (rule 4), or a Criterion cannot be verified in the available environment.
@@ -166,7 +181,7 @@ Rules:
 - Mocks do not prove real behavior.
 - Use real runtime/hardware/network/storage/integration paths when required.
 - Do not create other agents.
-- Do not commit, stash, reset, checkout, or modify the git index.
+- Do not commit, stash, reset, checkout, modify the git index, or touch `.git/`.
 
 Run relevant verification, then stop.
 
@@ -189,6 +204,8 @@ git diff --stat
 git diff
 ```
 
+Because HEAD is the last checkpoint, this shows only the current round's changes plus the unchanged baseline changes.
+
 Reject changes that:
 
 * exceed the task scope;
@@ -210,7 +227,7 @@ Reject unjustified:
 * changed fixtures merely to accept wrong output;
 * disabled warnings, lint, sanitizers, or checks.
 
-Then independently run the verification required by the Criteria.
+Then independently run the verification for every Criterion, including those already marked `PASS`. Move any regressed Criterion back to `unmet_criteria`.
 
 Only the Master may mark a Criterion `PASS`.
 
@@ -223,11 +240,25 @@ If a Criterion fails:
 
 If the same approach repeatedly fails, record it in `failed_approaches` and require a different approach.
 
+### Checkpoint
+
+If no `PASS` Criterion regressed and all remaining changes are in scope, stage only this round's task-owned hunks (§6) and commit:
+
+```bash
+git commit -m "checkpoint: round <N> - <summary>"
+```
+
+Update `last_checkpoint` and the state file.
+
+To discard a round, reverse-apply only its task-owned hunks. Never use `git reset --hard`, `git checkout .`, or `git stash`.
+
 ---
 
 ## 6. Protect Existing Changes
 
 `task-owned path != task-owned change`.
+
+Applies to every checkpoint and the final commit.
 
 Never overwrite, revert, stage, or commit unrelated pre-existing changes.
 
@@ -256,7 +287,7 @@ The staged diff must contain only task-owned changes.
 After all Criteria pass:
 
 * inspect task-owned changes for duplicate logic, unnecessary state, wrappers, abstractions, dead code, dependencies, or AI glue;
-* simplify only meaningful bloat introduced by this task;
+* dispatch a Worker to remove only meaningful bloat introduced by this task, then inspect and verify it as in §5;
 * do not clean up unrelated existing code;
 * verify required documentation synchronization according to repository rules.
 
@@ -273,7 +304,7 @@ git diff
 
 Run the complete final verification against the exact result being committed.
 
-Stage and commit only task-owned changes with a descriptive checkpoint commit.
+Stage and commit only task-owned changes as the final commit on the working branch. Do not merge it; leave merging or squashing to the user.
 
 Terminate owned child processes.
 
