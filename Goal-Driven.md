@@ -36,6 +36,10 @@ Only the Master decides completion.
 
 Before the first worker:
 
+If the current branch is `goal-driven/<name>` and its task directory's `state.md` has the same `goal` with `status` `active` or `stopped`, resume that task: re-read its `rules.md` and `state.md`, confirm HEAD matches `last_checkpoint` (otherwise report), set `status: active`, and skip baseline recording and branch creation.
+
+Otherwise, if the current branch is a previous `goal-driven/*` branch, stop and ask the user whether to stack on it or start from another branch.
+
 ```bash
 git rev-parse HEAD
 git stash list
@@ -43,13 +47,13 @@ git status --short
 git diff
 ```
 
-Record this baseline in `.git/goal-driven/`, and copy these rules to `.git/goal-driven/rules.md`.
-
 Create a dedicated working branch from the current HEAD; pre-existing uncommitted changes carry over untouched:
 
 ```bash
 git switch -c goal-driven/<short-task-name>
 ```
+
+The task directory is `.git/goal-driven/<short-task-name>/`, matching the branch name; if either already exists, choose another name. Record the baseline, including the original branch, in the task directory, and copy these rules to `rules.md` there.
 
 Preserve all pre-existing unrelated changes.
 
@@ -66,9 +70,11 @@ Local rules may refine broader rules but must not silently violate repository-wi
 
 If applicable documents materially conflict and scope does not resolve the conflict, report it instead of guessing.
 
-Maintain state in `.git/goal-driven/state.md` (never tracked or committed), updated after every round:
+Maintain state in `state.md` in the task directory (never tracked or committed), updated after every round:
 
 ```text
+goal
+status            # active | completed | stopped
 baseline
 working_branch
 last_checkpoint
@@ -84,7 +90,9 @@ failed_approaches
 
 The Master may expand `candidate_paths` when the task requires it; record the reason in the state file.
 
-After context loss, re-read `rules.md`, then restore state from `state.md` and repository evidence, never from memory or worker reports.
+A new Goal always gets a new task directory; never reuse another task's state.
+
+After context loss, locate the task directory from `git branch --show-current`, re-read its `rules.md`, then restore state from its `state.md` and repository evidence, never from memory or worker reports.
 
 ---
 
@@ -120,7 +128,7 @@ agent --model grok-4.7-xhigh --force --print --output-format text -p "<详细指
 2. **Direct Invocation**
    - Invoke the selected Worker CLI directly; its exit code and output must reach the Master unaltered.
    - Allowed: native process management for timeouts, output redirection to a log file, reading the prompt from a file.
-   - Redirect Worker output to `.git/goal-driven/logs/round-<N>-worker.log`; read only its final report.
+   - Redirect Worker output to `logs/round-<N>-worker.log` in the task directory; read only its final report.
    - Workers must not launch other agents (enforced via the Worker Prompt).
 
 3. **Fresh Context**
@@ -137,7 +145,7 @@ agent --model grok-4.7-xhigh --force --print --output-format text -p "<详细指
    - After every round, terminate any processes the Worker left running.
    - On timeout or failure, inspect changes before retrying: keep in-scope partial work; revert only out-of-scope task hunks, never baseline changes.
    - Lack of progress is never a reason to stop. When rounds stop making measurable progress, escalate: record the approach in `failed_approaches`, gather more evidence, decompose the problem into a smaller sub-task, or require a fundamentally different approach.
-   - Stop and report only when blocked by something no Worker round can resolve: the selected tool is unavailable, baseline changes are at risk (rule 4), or a Criterion cannot be verified in the available environment.
+   - Stop and report only when blocked by something no Worker round can resolve: the selected tool is unavailable, baseline changes are at risk (rule 4), or a Criterion cannot be verified in the available environment. Set `status: stopped` before reporting.
 
 ---
 
@@ -225,7 +233,7 @@ Reject unjustified:
 * changed fixtures merely to accept wrong output;
 * disabled warnings, lint, sanitizers, or checks.
 
-Then independently run the verification for every Criterion, including those already marked `PASS`. Move any regressed Criterion back to `unmet_criteria`. Redirect verification output to `.git/goal-driven/logs/round-<N>-verify.log`; read only failures and summaries.
+Then independently run the verification for every Criterion, including those already marked `PASS`. Move any regressed Criterion back to `unmet_criteria`. Redirect verification output to `logs/round-<N>-verify.log` in the task directory; read only failures and summaries.
 
 Only the Master may mark a Criterion `PASS`.
 
@@ -308,7 +316,7 @@ Declare success only when:
 * required documentation is synchronized;
 * final verification passes.
 
-Only the Master may output:
+Set `status: completed` in the state file. Only the Master may then output:
 
 ```text
 SUCCESS: ALL CRITERIA MET
