@@ -5,7 +5,7 @@ When the user provides:
 ```text
 Goal: [[[[[...]]]]]
 Criteria for success: [[[[[...]]]]]
-Tool: [[[[[agy | pi]]]]]
+Tool: [[[[[agy | pi | cursor]]]]]
 ```
 
 enter Goal-Driven mode.
@@ -38,6 +38,7 @@ Before the first worker:
 
 ```bash
 git rev-parse HEAD
+git stash list
 git status --short
 git diff
 ```
@@ -66,6 +67,7 @@ owned_paths
 verified_criteria
 unmet_criteria
 failure_evidence
+failed_approaches
 ```
 
 Reconstruct state from repository evidence when necessary rather than trusting memory or worker reports.
@@ -88,11 +90,41 @@ agy --model gemini-3.8-flash --effort high --dangerously-skip-permissions --prin
 pi -a --model llama-local/qwen3.8-27b -p "<详细指令>"
 ```
 
-Run exactly one worker per invocation.
+### cursor
 
-No shell wrappers, pipes, `&&`, or nested agents.
+```bash
+agent --model grok-4.7-xhigh --force --print --output-format text -p "<详细指令>"
+```
 
-Use a fresh compact context for each round.
+
+### Worker Execution Rules
+
+1. **One Worker at a Time**
+   - At most one Worker runs at any moment.
+   - The Master does not edit the workspace while a Worker runs.
+
+2. **Direct Invocation**
+   - Invoke the selected Worker CLI directly; its exit code and output must reach the Master unaltered.
+   - Allowed: native process management for timeouts, output redirection to a log file, reading the prompt from a file.
+   - Workers must not launch other agents (enforced via the Worker Prompt).
+
+3. **Fresh Context**
+   - Start a new Worker session every round; never resume previous conversations.
+   - Preserve workspace changes, but not conversational history.
+   - Pass only the fields of the Worker Prompt (§4), including previously failed approaches.
+
+4. **Git State Is Master-Owned**
+   - Workers must not commit, stash, reset, checkout, or modify the index.
+   - After each round, confirm `git rev-parse HEAD` and `git stash list` match the baseline; otherwise treat the round as failed and report.
+
+5. **Execution Limits**
+   - The Master sets a timeout for every invocation and terminates the Worker on expiry.
+   - On timeout or failure, inspect changes before retrying: keep in-scope partial work; revert only out-of-scope task hunks, never baseline changes.
+   - Lack of progress is never a reason to stop. When rounds stop making measurable progress, escalate: record the approach in `failed_approaches`, gather more evidence, decompose the problem into a smaller sub-task, or require a fundamentally different approach.
+   - Stop and report only when blocked by something no Worker round can resolve: the selected tool is unavailable, baseline changes are at risk (rule 4), or a Criterion cannot be verified in the available environment.
+
+6. **Tool Selection**
+   - See §3. If the selected tool is unavailable, stop and report; do not substitute.
 
 ---
 
@@ -119,6 +151,9 @@ Allowed paths:
 Observed failure/evidence:
 {{failure_evidence}}
 
+Previously failed approaches; do not repeat:
+{{failed_approaches}}
+
 Follow applicable repository instructions, AGENTS.md files,
 file contracts, and existing architectural boundaries.
 
@@ -131,6 +166,7 @@ Rules:
 - Mocks do not prove real behavior.
 - Use real runtime/hardware/network/storage/integration paths when required.
 - Do not create other agents.
+- Do not commit, stash, reset, checkout, or modify the git index.
 
 Run relevant verification, then stop.
 
@@ -185,7 +221,7 @@ If a Criterion fails:
 3. dispatch a fresh worker with that evidence;
 4. verify again.
 
-If the same approach repeatedly fails, require a different approach.
+If the same approach repeatedly fails, record it in `failed_approaches` and require a different approach.
 
 ---
 
