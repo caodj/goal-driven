@@ -15,7 +15,8 @@ while (criteria not met)
 
 | 文件 | 使用者 | 作用 |
 |---|---|---|
-| `Criteria Task Designer.md` | 你最强的对话模型 | 聊需求、生成任务、审核结果、生成后续任务 |
+| `Criteria Task Designer.md` | 你最强的对话模型 | 聊需求、生成任务、生成后续任务 |
+| `Criteria Task Reviewer.md` | 对话模型，最好与设计用的不同 | 独立审核已完成的任务 |
 | `Goal-Driven.md` | Master Agent | 派发 Worker、验证每条 Criterion、存检查点、提交 |
 
 ## 前置条件
@@ -77,13 +78,13 @@ Master 只会因为 Worker 无法解决的外部阻塞而停下：工具不可�
 
 ### 5. 新开对话审核
 
-Master 输出 `SUCCESS: ALL CRITERIA MET` 后，用 `Criteria Task Designer.md` **新开**一个对话，提供：
+Master 输出 `SUCCESS: ALL CRITERIA MET` 后，用 `Criteria Task Reviewer.md` **新开**一个对话，提供：
 
 * 任务的三段文本；
 * `git diff <起点分支>...goal-driven/<任务名>`；
 * `.git/goal-driven/<任务名>/state.md` 的内容。
 
-新开对话能让审核不受设计讨论的影响，也能节省设计对话的上下文。diff 太大时，先发 `git diff --stat`，再按它的要求逐个文件补充。
+独立的审核提示词和对话能让审核不受设计讨论的影响，也能节省设计对话的上下文。审核换一个和设计不同的模型，能减少两边盲点重合。diff 太大时，先发 `git diff --stat`，再按它的要求逐个文件补充。
 
 审核会输出 `VERDICT: PASS | FAIL`，以及标为 `[UNMET]`（确实没达标）、`[NEW REQUIREMENT]`（新的明确要求）、`[SUGGESTION]`（主观建议）的意见。主观建议由你自己取舍。
 
