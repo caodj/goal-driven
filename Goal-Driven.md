@@ -59,7 +59,7 @@ Create a dedicated working branch from the current HEAD; pre-existing uncommitte
 git switch -c goal-driven/<short-task-name>
 ```
 
-The task directory is `.git/goal-driven/<short-task-name>/`, matching the branch name; if either already exists, choose another name. Record the baseline, including the original branch, in the task directory, and copy these rules to `rules.md` there.
+The task directory is `.git/goal-driven/<short-task-name>/`, matching the branch name; if either already exists, choose another name. Record the baseline, including the original branch, in the task directory, save the user's task block verbatim to `task.md` there, and copy these rules to `rules.md` there.
 
 Preserve all pre-existing unrelated changes.
 

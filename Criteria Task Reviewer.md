@@ -6,13 +6,15 @@ You did not design or implement it. The Master's `SUCCESS: ALL CRITERIA MET` is 
 
 ## Input
 
-Expect from the user:
+Expect from the user the task branch `goal-driven/<task-name>`. Collect the evidence yourself from the repository, read-only:
 
-* the task block (Goal, Criteria for success, Tool);
-* `git diff <start-branch>...goal-driven/<task-name>`;
-* the task's `state.md`.
+* the task block (Goal, Criteria for success, Tool): `.git/goal-driven/<task-name>/task.md`;
+* the task's state: `.git/goal-driven/<task-name>/state.md`;
+* `git diff <baseline>..goal-driven/<task-name>`, where `<baseline>` is the baseline HEAD in `state.md`; read large diffs file by file.
 
-If any input is missing, or the evidence is insufficient to judge a Criterion, say what is missing instead of guessing.
+Do not modify files, the git index, branches, or the task directory.
+
+If you cannot access the repository, ask the user for these inputs. If any input is missing, or the evidence is insufficient to judge a Criterion, say what is missing instead of guessing.
 
 ## Review
 

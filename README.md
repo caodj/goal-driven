@@ -18,7 +18,7 @@ while (criteria not met)
 | File | Used by | Purpose |
 |---|---|---|
 | `Criteria Task Designer.md` | Your strongest chat model | Discuss requirements, generate the task, generate follow-up tasks |
-| `Criteria Task Reviewer.md` | A chat model, ideally a different one | Independently review a completed task |
+| `Criteria Task Reviewer.md` | An agent with repository access, ideally a different model | Independently review a completed task |
 | `Goal-Driven.md` | The Master Agent | Dispatch Workers, verify every Criterion, checkpoint, commit |
 
 ## Prerequisites
@@ -80,13 +80,9 @@ To resume after fixing the blocker, or after the Master session ends unexpectedl
 
 ### 5. Review in a new conversation
 
-After `SUCCESS: ALL CRITERIA MET`, open a **new** conversation with `Criteria Task Reviewer.md` and provide:
+After `SUCCESS: ALL CRITERIA MET`, open a **new** conversation in an agent that can read the repository and run `git` (for example, Cursor), paste `Criteria Task Reviewer.md`, and give it the branch `goal-driven/<task-name>`. The reviewer reads `task.md` and `state.md` from the task directory and runs the diff itself, without modifying anything.
 
-* the task block;
-* `git diff <start-branch>...goal-driven/<task-name>`;
-* the content of `.git/goal-driven/<task-name>/state.md`.
-
-A separate reviewer prompt and conversation keep the review independent of the design discussion and save the design conversation's context. Using a different model than the designer reduces shared blind spots. If the diff is too large, send `git diff --stat` first, then files on request.
+A separate reviewer prompt and conversation keep the review independent of the design discussion and save the design conversation's context. Using a different model than the designer reduces shared blind spots. If the reviewer has no repository access, provide the task block, `git diff <baseline>..goal-driven/<task-name>` (baseline HEAD from `state.md`), and `state.md` yourself; for a large diff, send `git diff --stat` first, then files on request.
 
 The review outputs `VERDICT: PASS | FAIL` and findings labeled `[UNMET]`, `[NEW REQUIREMENT]`, or `[SUGGESTION]`. Suggestions are subjective; decide yourself.
 
@@ -118,6 +114,7 @@ If a baseline uncommitted change touches a file the task also changed, `git swit
 ```text
 .git/goal-driven/<task-name>/
 ├── <baseline>      # HEAD, stash list, status, diff, original branch (named by the Master)
+├── task.md         # verbatim task block
 ├── rules.md        # copy of Goal-Driven.md used by this task
 ├── state.md        # goal, status, checkpoints, Criteria, failed approaches
 └── logs/

@@ -18,7 +18,7 @@ while (criteria not met)
 | 文件 | 使用者 | 作用 |
 |---|---|---|
 | `Criteria Task Designer.md` | 你最强的对话模型 | 聊需求、生成任务、生成后续任务 |
-| `Criteria Task Reviewer.md` | 对话模型，最好与设计用的不同 | 独立审核已完成的任务 |
+| `Criteria Task Reviewer.md` | 能访问仓库的 Agent，最好与设计用的模型不同 | 独立审核已完成的任务 |
 | `Goal-Driven.md` | Master Agent | 派发 Worker、验证每条 Criterion、存检查点、提交 |
 
 ## 前置条件
@@ -80,13 +80,9 @@ Master 只会因为 Worker 无法解决的外部阻塞而停下：工具不可�
 
 ### 5. 新开对话审核
 
-Master 输出 `SUCCESS: ALL CRITERIA MET` 后，用 `Criteria Task Reviewer.md` **新开**一个对话，提供：
+Master 输出 `SUCCESS: ALL CRITERIA MET` 后，在能读取仓库、能运行 `git` 的 Agent（例如 Cursor）里**新开**一个对话，粘贴 `Criteria Task Reviewer.md`，并告诉它分支名 `goal-driven/<任务名>`。审核会自己读取任务目录里的 `task.md` 和 `state.md`，自己运行 diff，不修改任何内容。
 
-* 任务的三段文本；
-* `git diff <起点分支>...goal-driven/<任务名>`；
-* `.git/goal-driven/<任务名>/state.md` 的内容。
-
-独立的审核提示词和对话能让审核不受设计讨论的影响，也能节省设计对话的上下文。审核换一个和设计不同的模型，能减少两边盲点重合。diff 太大时，先发 `git diff --stat`，再按它的要求逐个文件补充。
+独立的审核提示词和对话能让审核不受设计讨论的影响，也能节省设计对话的上下文。审核换一个和设计不同的模型，能减少两边盲点重合。如果审核无法访问仓库，就自己提供任务的三段文本、`git diff <基线>..goal-driven/<任务名>`（基线 HEAD 见 `state.md`）和 `state.md`；diff 太大时，先发 `git diff --stat`，再按它的要求逐个文件补充。
 
 审核会输出 `VERDICT: PASS | FAIL`，以及标为 `[UNMET]`（确实没达标）、`[NEW REQUIREMENT]`（新的明确要求）、`[SUGGESTION]`（主观建议）的意见。主观建议由你自己取舍。
 
@@ -118,6 +114,7 @@ git branch -D goal-driven/<任务名>    # 这一串里的每个分支
 ```text
 .git/goal-driven/<任务名>/
 ├── <baseline>      # HEAD、stash 列表、status、diff、原始分支（文件名由 Master 决定）
+├── task.md         # 一字不差的任务三段文本
 ├── rules.md        # 本任务使用的 Goal-Driven.md 副本
 ├── state.md        # 目标、状态、检查点、Criteria、失败过的方案
 └── logs/
