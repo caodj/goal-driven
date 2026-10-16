@@ -118,7 +118,11 @@ If a baseline uncommitted change touches a file the task also changed, `git swit
 ├── rules.md        # copy of Goal-Driven.md used by this task
 ├── state.md        # goal, status, checkpoints, Criteria, failed approaches
 └── logs/
-    ├── round-<N>-worker.log
+    ├── round-<N>-prompt.md     # this round's Worker Prompt
+    ├── round-<N>-worker.pid    # Worker wrapper PID; mtime is the start time
+    ├── round-<N>-worker.log    # raw Worker output (streamed events)
+    ├── round-<N>-worker.exit   # Worker exit code, written only after exit
+    ├── round-<N>-worker.progress  # workspace fingerprint, rewritten only on change; mtime is the last progress time
     └── round-<N>-verify.log
 ```
 

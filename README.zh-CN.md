@@ -118,7 +118,11 @@ git branch -D goal-driven/<任务名>    # 这一串里的每个分支
 ├── rules.md        # 本任务使用的 Goal-Driven.md 副本
 ├── state.md        # 目标、状态、检查点、Criteria、失败过的方案
 └── logs/
-    ├── round-<N>-worker.log
+    ├── round-<N>-prompt.md     # 本轮 Worker Prompt
+    ├── round-<N>-worker.pid    # Worker 包装进程 PID，修改时间即启动时间
+    ├── round-<N>-worker.log    # Worker 原始输出（流式事件）
+    ├── round-<N>-worker.exit   # Worker 退出码，仅在退出后写入
+    ├── round-<N>-worker.progress  # 工作区指纹，仅在变化时重写，修改时间即最后进展时间
     └── round-<N>-verify.log
 ```
 

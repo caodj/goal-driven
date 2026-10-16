@@ -40,7 +40,7 @@ If the current branch is `goal-driven/<name>` and its task directory's `state.md
 
 1. re-read its `rules.md` and `state.md`;
 2. confirm HEAD matches `last_checkpoint` (otherwise report);
-3. confirm no Worker from the previous session is still running; wait for it to exit or terminate it;
+3. confirm no Worker from the previous session is still running (`running_worker`, polled as in §3); wait for it to exit or terminate it;
 4. treat non-baseline changes since `last_checkpoint` as a finished round: inspect, verify, and checkpoint them as in §5 before dispatching;
 5. set `status: active`.
 
@@ -84,6 +84,7 @@ status            # active | completed | stopped
 baseline
 working_branch
 last_checkpoint
+running_worker    # round <N> and PID, or none
 candidate_paths
 owned_paths
 verified_criteria
@@ -109,21 +110,80 @@ Use only the Tool requested by the user; it overrides repository default worker 
 ### agy
 
 ```bash
-agy --model gemini-3.8-flash --effort high --dangerously-skip-permissions --print-timeout 60m -p "<详细指令>"
+agy --model gemini-3.8-flash --effort high --dangerously-skip-permissions --output-format stream-json -p "<详细指令>"
 ```
+
+Final report: the last `{"event":"result"}` line; `result.status` and `result.response`.
 
 ### pi
 
 ```bash
-pi -a --model llama-local/qwen3.8-27b -p "<详细指令>"
+pi -a --model llama-local/qwen3.8-27b --mode json -p "<详细指令>"
 ```
+
+Final report: the last `{"type":"turn_end"}` line; the text in `message.content`.
 
 ### cursor
 
 ```bash
-agent --model grok-4.7-xhigh --force --print --output-format text -p "<详细指令>"
+agent --model grok-4.7-xhigh --force --print --output-format stream-json -p "<详细指令>"
 ```
 
+Final report: the last `{"type":"result"}` line; `is_error` and `result`.
+
+### Detached Launch
+
+Write the Worker Prompt to `logs/round-<N>-prompt.md` in the task directory. `<worker args>` is the selected command above without `-p "<详细指令>"`; `-p` must stay last. The launch returns immediately and leaves, next to the prompt:
+
+* `round-<N>-worker.pid`: wrapper PID, written at start; its mtime is the start time;
+* `round-<N>-worker.log`: the Worker's unaltered stdout and stderr;
+* `round-<N>-worker.exit`: the Worker's unaltered exit code, written only after it exits.
+
+bash:
+
+```bash
+L=.git/goal-driven/<task>/logs; N=<round>
+setsid bash -c 'echo $$ > "$0.pid"
+  <worker args> -p "$(cat "$1")" < /dev/null > "$0.log" 2>&1
+  echo $? > "$0.exit.tmp" && mv "$0.exit.tmp" "$0.exit"' "$L/round-$N-worker" "$L/round-$N-prompt.md" > /dev/null 2>&1 &
+```
+
+PowerShell 7:
+
+```powershell
+$L = (Resolve-Path .git/goal-driven/<task>/logs).Path; $N = <round>; $f = "$L\round-$N-worker"
+$w = "& <worker args> -p (Get-Content -Raw '$L\round-$N-prompt.md') *> '$f.log'; `$LASTEXITCODE > '$f.exit.tmp'; Move-Item '$f.exit.tmp' '$f.exit'"
+$p = Start-Process pwsh -WindowStyle Hidden -PassThru -ArgumentList "-NoProfile -NonInteractive -EncodedCommand $([Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($w)))"
+$p.Id > "$f.pid"
+```
+
+### Polling
+
+Each poll records a workspace fingerprint (tracked diff plus untracked file contents) in `round-<N>-worker.progress`, rewritten only when it changes, so its mtime is the last progress time. It then prints one state line: `DONE exit=<code>`, `RUNNING elapsed=<s> idle=<s> stale=<s>` (idle = time since the log last grew; stale = time since the workspace last changed), or `DEAD` (exited without `.exit`).
+
+bash (macOS: `stat -f %m` instead of `stat -c %Y`; `setsid` from util-linux):
+
+```bash
+f=.git/goal-driven/<task>/logs/round-<N>-worker
+h=$({ git diff HEAD; git ls-files -o --exclude-standard | git hash-object --stdin-paths; } | git hash-object --stdin)
+[ "$h" = "$(cat "$f.progress" 2>/dev/null)" ] || echo "$h" > "$f.progress"
+if [ -f "$f.exit" ]; then echo "DONE exit=$(cat "$f.exit")"
+elif kill -0 "$(cat "$f.pid")" 2>/dev/null; then t=$(date +%s); echo "RUNNING elapsed=$(( t - $(stat -c %Y "$f.pid") ))s idle=$(( t - $(stat -c %Y "$f.log") ))s stale=$(( t - $(stat -c %Y "$f.progress") ))s"
+else echo "DEAD"; fi
+# terminate the process tree: kill -TERM -- -"$(cat "$f.pid")"
+```
+
+PowerShell 7:
+
+```powershell
+$f = "$((Resolve-Path .git/goal-driven/<task>/logs).Path)\round-<N>-worker"
+$h = & { git diff HEAD; git ls-files -o --exclude-standard | git hash-object --stdin-paths } | git hash-object --stdin
+if ($h -ne (Get-Content "$f.progress" -ErrorAction SilentlyContinue)) { $h > "$f.progress" }
+if (Test-Path "$f.exit") { "DONE exit=$(Get-Content "$f.exit")" }
+elseif (Get-Process -Id (Get-Content "$f.pid") -ErrorAction SilentlyContinue) { $t = Get-Date; "RUNNING elapsed=$([int]($t - (Get-Item "$f.pid").LastWriteTime).TotalSeconds)s idle=$([int]($t - (Get-Item "$f.log").LastWriteTime).TotalSeconds)s stale=$([int]($t - (Get-Item "$f.progress").LastWriteTime).TotalSeconds)s" }
+else { "DEAD" }
+# terminate the process tree: taskkill /T /F /PID (Get-Content "$f.pid")
+```
 
 ### Worker Execution Rules
 
@@ -131,10 +191,11 @@ agent --model grok-4.7-xhigh --force --print --output-format text -p "<详细指
    - At most one Worker runs at any moment.
    - The Master does not edit the workspace while a Worker runs.
 
-2. **Direct Invocation**
-   - Invoke the selected Worker CLI directly; its exit code and output must reach the Master unaltered.
-   - Allowed: native process management for timeouts, output redirection to a log file, reading the prompt from a file.
-   - Redirect Worker output to `logs/round-<N>-worker.log` in the task directory; read only its final report.
+2. **Detached Invocation**
+   - Never run a Worker as a foreground tool call; the Master's tool-call timeout must not decide the Worker's lifetime.
+   - Launch and poll the selected Worker CLI only with the Detached Launch and Polling templates; no other wrappers. Its exit code and output reach the Master unaltered through `.exit` and `.log`.
+   - Set `running_worker` in `state.md` at launch; set it to `none` when the round ends.
+   - Read only the Worker's final report from the log.
    - Workers must not launch other agents (enforced via the Worker Prompt).
 
 3. **Fresh Context**
@@ -147,7 +208,15 @@ agent --model grok-4.7-xhigh --force --print --output-format text -p "<详细指
    - After each round, confirm `git rev-parse HEAD` matches `last_checkpoint` and `git stash list` matches the baseline; otherwise treat the round as failed and report.
 
 5. **Execution Limits**
-   - The Master sets a timeout for every invocation and terminates the Worker on expiry.
+   - Keep three clocks separate:
+     - tool-call timeout: set by the Master's harness; every launch and poll call must finish well within it;
+     - progress limit (default 60 min): limit on `stale`; `elapsed` is not limited, so a Worker that keeps changing the workspace runs as long as it needs;
+     - stall limit (default 20 min): limit on `idle`; raise it when a single command run by the Worker may legitimately take longer.
+   - Poll every 1–5 minutes, preferring the harness's native background-wait facility; otherwise use a bounded `sleep` well under the tool-call timeout. Print only the state line, never the log.
+   - Act on the state:
+     - `DONE` → read the final report, then inspect and verify (§5);
+     - `DEAD` → the Worker crashed or was killed; treat the round as failed;
+     - `RUNNING` beyond the progress limit or stall limit → terminate its process tree; treat the round as timed out.
    - After every round, terminate any processes the Worker left running.
    - On timeout or failure, inspect changes before retrying: keep in-scope partial work; revert only out-of-scope task hunks, never baseline changes.
    - Lack of progress is never a reason to stop. When rounds stop making measurable progress, escalate: record the approach in `failed_approaches`, gather more evidence, decompose the problem into a smaller sub-task, or require a fundamentally different approach.
