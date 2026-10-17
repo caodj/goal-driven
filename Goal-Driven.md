@@ -41,7 +41,7 @@ Before the first worker:
 If the current branch is `goal-driven/<name>` and its task directory's `state.md` has the same `goal` with `status` `active` or `stopped`, resume that task, skipping baseline recording and branch creation:
 
 1. re-read its `rules.md` and `state.md`;
-2. confirm HEAD matches `last_checkpoint` (otherwise report);
+2. confirm HEAD matches `last_checkpoint` (otherwise set `status: stopped`, stop, and report);
 3. confirm no Worker from the previous session is still running (`running_worker`, polled as in §3); wait for it to exit or terminate it;
 4. treat non-baseline changes since `last_checkpoint` as a finished round: inspect, verify, and checkpoint them as in §5 before dispatching;
 5. set `status: active`.
@@ -88,7 +88,6 @@ working_branch
 last_checkpoint
 running_worker    # round <N> and PID, or none
 candidate_paths
-owned_paths
 verified_criteria
 unmet_criteria
 failure_evidence
@@ -161,7 +160,7 @@ The script checks once a minute. Each check records a workspace fingerprint (tra
 
 * `DONE exit=<code>`: the Worker exited;
 * `DEAD`: the Worker exited without `.exit`;
-* `STALLED <times>`: `idle` (time since the log last grew) exceeds the stall limit;
+* `STALLED <times>`: both `idle` (time since the log last grew) and `stale` exceed the stall limit;
 * `NO_PROGRESS <times>`: `stale` (time since the workspace last changed) exceeds the progress limit;
 * `RUNNING <times>`: `<max-wait-seconds>` passed with none of the above.
 
@@ -202,7 +201,7 @@ On macOS, `setsid` comes from util-linux, and the copied `poll.sh` needs `stat -
    - Keep three clocks separate:
      - tool-call timeout: set by the Master's harness; every launch and poll call must finish well within it;
      - progress limit (default 60 min): limit on `stale`; `elapsed` is not limited, so a Worker that keeps changing the workspace runs as long as it needs;
-     - stall limit (default 20 min): limit on `idle`; raise it when a single command run by the Worker may legitimately take longer.
+     - stall limit (default 20 min): limit on `idle` while `stale` also exceeds it; raise it when a single command run by the Worker may legitimately run that long without output or workspace changes.
    - Wait with the harness's native background completion notification when available; otherwise call the poll script again after each `RUNNING`. Never read the log while waiting.
    - Act on the state:
      - `DONE` → read the final report, then inspect and verify (§5);
@@ -276,7 +275,7 @@ git diff --stat
 git diff
 ```
 
-Because HEAD is the last checkpoint, this shows only the current round's changes plus the unchanged baseline changes. Read large diffs file by file (`git diff -- <path>`).
+Because HEAD is the last checkpoint, this shows only the current round's changes plus the unchanged baseline changes. Read large diffs file by file (`git diff -- <path>`). Untracked files appear only as `??` in `git status --short`; read new ones (those absent from the baseline status) directly.
 
 Reject changes that:
 
@@ -312,7 +311,7 @@ If a Criterion fails:
 
 ### Checkpoint
 
-If no `PASS` Criterion regressed and all remaining changes are in scope, stage only this round's task-owned hunks (§6) and commit:
+If the round left task-owned hunks, no `PASS` Criterion regressed, and all remaining changes are in scope, stage only this round's task-owned hunks (§6) and commit:
 
 ```bash
 git commit -m "checkpoint: round <N> - <summary>"
@@ -332,13 +331,13 @@ Applies to every checkpoint and the final commit.
 
 Never overwrite, revert, stage, or commit unrelated pre-existing changes.
 
-If a task-owned file already had baseline modifications, stage only task-owned hunks.
-
-Prefer a non-interactive patch applied directly to the index:
+If a task-owned file already had baseline modifications, stage only task-owned hunks with a non-interactive patch applied directly to the index:
 
 ```bash
 git apply --cached <task-owned.patch>
 ```
+
+Stage files that are entirely task-owned with `git add -- <path>`. Never use interactive staging (`git add -p`, `git add -i`).
 
 Then inspect:
 
@@ -357,7 +356,7 @@ The staged diff must contain only task-owned changes.
 After all Criteria pass:
 
 * inspect task-owned changes for duplicate logic, unnecessary state, wrappers, abstractions, dead code, dependencies, or AI glue;
-* dispatch a Worker to remove only meaningful bloat introduced by this task, then inspect and verify it as in §5;
+* only if meaningful bloat introduced by this task is found, dispatch a Worker to remove just that, then inspect and verify it as in §5;
 * do not clean up unrelated existing code;
 * verify required documentation synchronization according to repository rules.
 

@@ -15,7 +15,7 @@ while ($true) {
   $t = Get-Date
   $e, $i, $s = "$f.pid", "$f.log", "$f.progress" | ForEach-Object { [int]($t - (Get-Item $_).LastWriteTime).TotalSeconds }
   $m = "elapsed=${e}s idle=${i}s stale=${s}s"
-  if ($i -gt $Stall) { "STALLED $m"; exit }
+  if ($i -gt $Stall -and $s -gt $Stall) { "STALLED $m"; exit }
   if ($s -gt $Progress) { "NO_PROGRESS $m"; exit }
   if ($t -ge $end) { "RUNNING $m"; exit }
   Start-Sleep ([Math]::Max(1, [Math]::Min(60, ($end - $t).TotalSeconds)))

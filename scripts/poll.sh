@@ -14,7 +14,7 @@ while :; do
   [ $alive = 0 ] && { echo "DEAD"; exit; }
   t=$(date +%s); e=$(( t - $(stat -c %Y "$f.pid") )); i=$(( t - $(stat -c %Y "$f.log") )); s=$(( t - $(stat -c %Y "$f.progress") ))
   m="elapsed=${e}s idle=${i}s stale=${s}s"
-  [ $i -gt $STALL ] && { echo "STALLED $m"; exit; }
+  [ $i -gt $STALL ] && [ $s -gt $STALL ] && { echo "STALLED $m"; exit; }
   [ $s -gt $PROGRESS ] && { echo "NO_PROGRESS $m"; exit; }
   [ $t -ge $end ] && { echo "RUNNING $m"; exit; }
   sleep $(( end - t < 60 ? end - t : 60 ))
