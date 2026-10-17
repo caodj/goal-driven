@@ -10,6 +10,8 @@ Tool: [[[[[agy | pi | cursor]]]]]
 
 enter Goal-Driven mode.
 
+Scripts directory: `<path-to-goal-driven>/scripts` (set once to the absolute path of this repository's `scripts/`).
+
 ## 1. Role
 
 You are the **Master Agent**.
@@ -59,7 +61,7 @@ Create a dedicated working branch from the current HEAD; pre-existing uncommitte
 git switch -c goal-driven/<short-task-name>
 ```
 
-The task directory is `.git/goal-driven/<short-task-name>/`, matching the branch name; if either already exists, choose another name. Record the baseline, including the original branch, in the task directory, save the user's task block verbatim to `task.md` there, and copy these rules to `rules.md` there.
+The task directory is `.git/goal-driven/<short-task-name>/`, matching the branch name; if either already exists, choose another name. Record the baseline, including the original branch, in the task directory, save the user's task block verbatim to `task.md` there, copy these rules to `rules.md` there, and copy `launch` and `poll` for the shell in use (`.sh` for bash, `.ps1` for PowerShell 7) from the Scripts directory there. If the Scripts directory is unavailable, stop and report.
 
 Preserve all pre-existing unrelated changes.
 
@@ -133,57 +135,46 @@ Final report: the last `{"type":"result"}` line; `is_error` and `result`.
 
 ### Detached Launch
 
-Write the Worker Prompt to `logs/round-<N>-prompt.md` in the task directory. `<worker args>` is the selected command above without `-p "<详细指令>"`; `-p` must stay last. The launch returns immediately and leaves, next to the prompt:
+Write the Worker Prompt to `logs/round-<N>-prompt.md` in the task directory, then launch from the repository root. `<worker args>` is the selected command above without `-p "<详细指令>"`; the script appends `-p` and the prompt.
+
+```text
+bash .git/goal-driven/<task>/launch.sh <N> <worker args>
+pwsh -NoProfile -File .git/goal-driven/<task>/launch.ps1 <N> <worker args>
+```
+
+The launch returns immediately and leaves, next to the prompt:
 
 * `round-<N>-worker.pid`: wrapper PID, written at start; its mtime is the start time;
 * `round-<N>-worker.log`: the Worker's unaltered stdout and stderr;
 * `round-<N>-worker.exit`: the Worker's unaltered exit code, written only after it exits.
 
-bash:
-
-```bash
-L=.git/goal-driven/<task>/logs; N=<round>
-setsid bash -c 'echo $$ > "$0.pid"
-  <worker args> -p "$(cat "$1")" < /dev/null > "$0.log" 2>&1
-  echo $? > "$0.exit.tmp" && mv "$0.exit.tmp" "$0.exit"' "$L/round-$N-worker" "$L/round-$N-prompt.md" > /dev/null 2>&1 &
-```
-
-PowerShell 7:
-
-```powershell
-$L = (Resolve-Path .git/goal-driven/<task>/logs).Path; $N = <round>; $f = "$L\round-$N-worker"
-$w = "& <worker args> -p (Get-Content -Raw '$L\round-$N-prompt.md') *> '$f.log'; `$LASTEXITCODE > '$f.exit.tmp'; Move-Item '$f.exit.tmp' '$f.exit'"
-$p = Start-Process pwsh -WindowStyle Hidden -PassThru -ArgumentList "-NoProfile -NonInteractive -EncodedCommand $([Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($w)))"
-$p.Id > "$f.pid"
-```
-
 ### Polling
 
-Each poll records a workspace fingerprint (tracked diff plus untracked file contents) in `round-<N>-worker.progress`, rewritten only when it changes, so its mtime is the last progress time. It then prints one state line: `DONE exit=<code>`, `RUNNING elapsed=<s> idle=<s> stale=<s>` (idle = time since the log last grew; stale = time since the workspace last changed), or `DEAD` (exited without `.exit`).
+Poll from the repository root with `<max-wait-seconds>` at least 60 s below the tool-call timeout; the limits (seconds) default to rule 5.
 
-bash (macOS: `stat -f %m` instead of `stat -c %Y`; `setsid` from util-linux):
-
-```bash
-f=.git/goal-driven/<task>/logs/round-<N>-worker
-h=$({ git diff HEAD; git ls-files -o --exclude-standard | git hash-object --stdin-paths; } | git hash-object --stdin)
-[ "$h" = "$(cat "$f.progress" 2>/dev/null)" ] || echo "$h" > "$f.progress"
-if [ -f "$f.exit" ]; then echo "DONE exit=$(cat "$f.exit")"
-elif kill -0 "$(cat "$f.pid")" 2>/dev/null; then t=$(date +%s); echo "RUNNING elapsed=$(( t - $(stat -c %Y "$f.pid") ))s idle=$(( t - $(stat -c %Y "$f.log") ))s stale=$(( t - $(stat -c %Y "$f.progress") ))s"
-else echo "DEAD"; fi
-# terminate the process tree: kill -TERM -- -"$(cat "$f.pid")"
+```text
+bash .git/goal-driven/<task>/poll.sh <N> <max-wait-seconds> [stall-seconds] [progress-seconds]
+pwsh -NoProfile -File .git/goal-driven/<task>/poll.ps1 <N> <max-wait-seconds> [stall-seconds] [progress-seconds]
 ```
 
-PowerShell 7:
+The script checks once a minute. Each check records a workspace fingerprint (tracked diff plus untracked file contents) in `round-<N>-worker.progress`, rewritten only when it changes, so its mtime is the last progress time. It returns one state line as soon as any of these holds:
 
-```powershell
-$f = "$((Resolve-Path .git/goal-driven/<task>/logs).Path)\round-<N>-worker"
-$h = & { git diff HEAD; git ls-files -o --exclude-standard | git hash-object --stdin-paths } | git hash-object --stdin
-if ($h -ne (Get-Content "$f.progress" -ErrorAction SilentlyContinue)) { $h > "$f.progress" }
-if (Test-Path "$f.exit") { "DONE exit=$(Get-Content "$f.exit")" }
-elseif (Get-Process -Id (Get-Content "$f.pid") -ErrorAction SilentlyContinue) { $t = Get-Date; "RUNNING elapsed=$([int]($t - (Get-Item "$f.pid").LastWriteTime).TotalSeconds)s idle=$([int]($t - (Get-Item "$f.log").LastWriteTime).TotalSeconds)s stale=$([int]($t - (Get-Item "$f.progress").LastWriteTime).TotalSeconds)s" }
-else { "DEAD" }
-# terminate the process tree: taskkill /T /F /PID (Get-Content "$f.pid")
+* `DONE exit=<code>`: the Worker exited;
+* `DEAD`: the Worker exited without `.exit`;
+* `STALLED <times>`: `idle` (time since the log last grew) exceeds the stall limit;
+* `NO_PROGRESS <times>`: `stale` (time since the workspace last changed) exceeds the progress limit;
+* `RUNNING <times>`: `<max-wait-seconds>` passed with none of the above.
+
+`<times>` is `elapsed=<s> idle=<s> stale=<s>`.
+
+Terminate the Worker's process tree:
+
+```text
+bash: kill -TERM -- -"$(cat .git/goal-driven/<task>/logs/round-<N>-worker.pid)"
+pwsh: taskkill /T /F /PID (Get-Content .git/goal-driven/<task>/logs/round-<N>-worker.pid)
 ```
+
+On macOS, `setsid` comes from util-linux, and the copied `poll.sh` needs `stat -f %m` instead of `stat -c %Y`.
 
 ### Worker Execution Rules
 
@@ -193,7 +184,7 @@ else { "DEAD" }
 
 2. **Detached Invocation**
    - Never run a Worker as a foreground tool call; the Master's tool-call timeout must not decide the Worker's lifetime.
-   - Launch and poll the selected Worker CLI only with the Detached Launch and Polling templates; no other wrappers. Its exit code and output reach the Master unaltered through `.exit` and `.log`.
+   - Launch and poll the selected Worker CLI only with the copied launch and poll scripts; no other wrappers. Its exit code and output reach the Master unaltered through `.exit` and `.log`.
    - Set `running_worker` in `state.md` at launch; set it to `none` when the round ends.
    - Read only the Worker's final report from the log.
    - Workers must not launch other agents (enforced via the Worker Prompt).
@@ -212,11 +203,11 @@ else { "DEAD" }
      - tool-call timeout: set by the Master's harness; every launch and poll call must finish well within it;
      - progress limit (default 60 min): limit on `stale`; `elapsed` is not limited, so a Worker that keeps changing the workspace runs as long as it needs;
      - stall limit (default 20 min): limit on `idle`; raise it when a single command run by the Worker may legitimately take longer.
-   - Poll every 1–5 minutes, preferring the harness's native background-wait facility; otherwise use a bounded `sleep` well under the tool-call timeout. Print only the state line, never the log.
+   - Wait with the harness's native background completion notification when available; otherwise call the poll script again after each `RUNNING`. Never read the log while waiting.
    - Act on the state:
      - `DONE` → read the final report, then inspect and verify (§5);
      - `DEAD` → the Worker crashed or was killed; treat the round as failed;
-     - `RUNNING` beyond the progress limit or stall limit → terminate its process tree; treat the round as timed out.
+     - `STALLED` or `NO_PROGRESS` → terminate its process tree; treat the round as timed out.
    - After every round, terminate any processes the Worker left running.
    - On timeout or failure, inspect changes before retrying: keep in-scope partial work; revert only out-of-scope task hunks, never baseline changes.
    - Lack of progress is never a reason to stop. When rounds stop making measurable progress, escalate: record the approach in `failed_approaches`, gather more evidence, decompose the problem into a smaller sub-task, or require a fundamentally different approach.

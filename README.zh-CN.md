@@ -20,11 +20,14 @@ while (criteria not met)
 | `Criteria Task Designer.md` | 你最强的对话模型 | 聊需求、生成任务、生成后续任务 |
 | `Criteria Task Reviewer.md` | 能访问仓库的 Agent，最好与设计用的模型不同 | 独立审核已完成的任务 |
 | `Goal-Driven.md` | Master Agent | 派发 Worker、验证每条 Criterion、存检查点、提交 |
+| `scripts/` | Master Agent | 后台启动和轮询 Worker（`launch` / `poll`，分 `.sh` 和 `.ps1`） |
 
 ## 前置条件
 
 * 目标项目是一个 git 仓库。
 * 选定的 Worker 命令行工具已安装并能正常运行：`agy`、`pi` 或 `agent`（cursor）。
+* Master 使用的 shell 是 bash（Linux/macOS）或 PowerShell 7（Windows）。
+* `Goal-Driven.md` 顶部的 `Scripts directory` 一行已改成本仓库 `scripts/` 的绝对路径，且 Master 能读取该目录。
 * Master Agent 已加载 `Goal-Driven.md` 作为指令。
 
 ## 工作流程
@@ -117,6 +120,7 @@ git branch -D goal-driven/<任务名>    # 这一串里的每个分支
 ├── task.md         # 一字不差的任务三段文本
 ├── rules.md        # 本任务使用的 Goal-Driven.md 副本
 ├── state.md        # 目标、状态、检查点、Criteria、失败过的方案
+├── launch.* poll.*  # 按 Master 的 shell 从 scripts/ 复制的启动和轮询脚本（.sh 或 .ps1）
 └── logs/
     ├── round-<N>-prompt.md     # 本轮 Worker Prompt
     ├── round-<N>-worker.pid    # Worker 包装进程 PID，修改时间即启动时间

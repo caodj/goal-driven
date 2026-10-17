@@ -20,11 +20,14 @@ while (criteria not met)
 | `Criteria Task Designer.md` | Your strongest chat model | Discuss requirements, generate the task, generate follow-up tasks |
 | `Criteria Task Reviewer.md` | An agent with repository access, ideally a different model | Independently review a completed task |
 | `Goal-Driven.md` | The Master Agent | Dispatch Workers, verify every Criterion, checkpoint, commit |
+| `scripts/` | The Master Agent | Detached Worker launch and polling (`launch` / `poll`, `.sh` and `.ps1`) |
 
 ## Prerequisites
 
 * The target project is a git repository.
 * The selected Worker CLI is installed and works: `agy`, `pi`, or `agent` (cursor).
+* The Master's shell is bash (Linux/macOS) or PowerShell 7 (Windows).
+* The `Scripts directory` line at the top of `Goal-Driven.md` is set to the absolute path of this repository's `scripts/`, and the Master can read it.
 * The Master Agent has `Goal-Driven.md` loaded as its instructions.
 
 ## Workflow
@@ -117,6 +120,7 @@ If a baseline uncommitted change touches a file the task also changed, `git swit
 ├── task.md         # verbatim task block
 ├── rules.md        # copy of Goal-Driven.md used by this task
 ├── state.md        # goal, status, checkpoints, Criteria, failed approaches
+├── launch.* poll.*  # copied from scripts/ for the Master's shell (.sh or .ps1)
 └── logs/
     ├── round-<N>-prompt.md     # this round's Worker Prompt
     ├── round-<N>-worker.pid    # Worker wrapper PID; mtime is the start time
