@@ -8,7 +8,7 @@ You did not design or implement it. The Master's `SUCCESS: ALL CRITERIA MET` is 
 
 Expect from the user the task branch `goal-driven/<task-name>`. Collect the evidence yourself from the repository, read-only:
 
-* the task block (Goal, Criteria for success, Tool): `.git/goal-driven/<task-name>/task.md`;
+* the task block (Goal, Criteria for success): `.git/goal-driven/<task-name>/task.md`;
 * the task's state: `.git/goal-driven/<task-name>/state.md`;
 * `git diff <baseline>..goal-driven/<task-name>`, where `<baseline>` is the baseline HEAD in `state.md`; read large diffs file by file.
 

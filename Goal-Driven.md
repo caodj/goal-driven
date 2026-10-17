@@ -5,12 +5,15 @@ When the user provides:
 ```text
 Goal: [[[[[...]]]]]
 Criteria for success: [[[[[...]]]]]
-Tool: [[[[[agy | pi | cursor]]]]]
 ```
 
 enter Goal-Driven mode.
 
 Scripts directory: `<path-to-goal-driven>/scripts` (set once to the absolute path of this repository's `scripts/`).
+
+Worker command: `agy --model gemini-3.8-flash --effort high --dangerously-skip-permissions --output-format stream-json`
+
+Worker report: the last `{"event":"result"}` line; `result.status` and `result.response`.
 
 ## 1. Role
 
@@ -40,7 +43,7 @@ Before the first worker:
 
 If the current branch is `goal-driven/<name>` and its task directory's `state.md` has the same `goal` with `status` `active` or `stopped`, resume that task, skipping baseline recording and branch creation:
 
-1. re-read its `rules.md` and `state.md`;
+1. re-read its `rules.md` and `state.md`; take the Worker command and Worker report from the currently loaded instructions, not from `rules.md`;
 2. confirm HEAD matches `last_checkpoint` (otherwise set `status: stopped`, stop, and report);
 3. confirm no Worker from the previous session is still running (`running_worker`, polled as in §3); wait for it to exit or terminate it;
 4. treat non-baseline changes since `last_checkpoint` as a finished round: inspect, verify, and checkpoint them as in §5 before dispatching;
@@ -106,35 +109,13 @@ After context loss, locate the task directory from `git branch --show-current`, 
 
 ## 3. Worker Launch
 
-Use only the Tool requested by the user; it overrides repository default worker tools. If it is unavailable, stop and report; do not substitute.
+Use only the Worker command at the top of these rules; it overrides repository default worker tools. If it is unavailable, stop and report; do not substitute.
 
-### agy
-
-```bash
-agy --model gemini-3.8-flash --effort high --dangerously-skip-permissions --output-format stream-json -p "<详细指令>"
-```
-
-Final report: the last `{"event":"result"}` line; `result.status` and `result.response`.
-
-### pi
-
-```bash
-pi -a --model llama-local/qwen3.8-27b --mode json -p "<详细指令>"
-```
-
-Final report: the last `{"type":"turn_end"}` line; the text in `message.content`.
-
-### cursor
-
-```bash
-agent --model grok-4.7-xhigh --force --print --output-format stream-json -p "<详细指令>"
-```
-
-Final report: the last `{"type":"result"}` line; `is_error` and `result`.
+Locate the Worker's final report in its log as stated by Worker report.
 
 ### Detached Launch
 
-Write the Worker Prompt to `logs/round-<N>-prompt.md` in the task directory, then launch from the repository root. `<worker args>` is the selected command above without `-p "<详细指令>"`; the script appends `-p` and the prompt.
+Write the Worker Prompt to `logs/round-<N>-prompt.md` in the task directory, then launch from the repository root. `<worker args>` is the Worker command; the script appends `-p` and the prompt.
 
 ```text
 bash .git/goal-driven/<task>/launch.sh <N> <worker args>
@@ -183,7 +164,7 @@ On macOS, `setsid` comes from util-linux, and the copied `poll.sh` needs `stat -
 
 2. **Detached Invocation**
    - Never run a Worker as a foreground tool call; the Master's tool-call timeout must not decide the Worker's lifetime.
-   - Launch and poll the selected Worker CLI only with the copied launch and poll scripts; no other wrappers. Its exit code and output reach the Master unaltered through `.exit` and `.log`.
+   - Launch and poll the Worker CLI only with the copied launch and poll scripts; no other wrappers. Its exit code and output reach the Master unaltered through `.exit` and `.log`.
    - Set `running_worker` in `state.md` at launch; set it to `none` when the round ends.
    - Read only the Worker's final report from the log.
    - Workers must not launch other agents (enforced via the Worker Prompt).
@@ -210,7 +191,7 @@ On macOS, `setsid` comes from util-linux, and the copied `poll.sh` needs `stat -
    - After every round, terminate any processes the Worker left running.
    - On timeout or failure, inspect changes before retrying: keep in-scope partial work; revert only out-of-scope task hunks, never baseline changes.
    - Lack of progress is never a reason to stop. When rounds stop making measurable progress, escalate: record the approach in `failed_approaches`, gather more evidence, decompose the problem into a smaller sub-task, or require a fundamentally different approach.
-   - Stop and report only when blocked by something no Worker round can resolve: the selected tool is unavailable, baseline changes are at risk (rule 4), or a Criterion cannot be verified in the available environment. Set `status: stopped` before reporting.
+   - Stop and report only when blocked by something no Worker round can resolve: the Worker command is unavailable, baseline changes are at risk (rule 4), or a Criterion cannot be verified in the available environment. Set `status: stopped` before reporting.
 
 ---
 

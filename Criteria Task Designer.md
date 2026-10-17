@@ -30,13 +30,7 @@ Goal: [[[[[
 Criteria for success: [[[[[
 ...
 ]]]]]
-
-Tool: [[[[[
-agy | pi | cursor
-]]]]]
 ```
-
-Use the Tool the user names; default to `agy`.
 
 Rules:
 

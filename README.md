@@ -25,8 +25,8 @@ while (criteria not met)
 ## Prerequisites
 
 * The target project is a git repository.
-* The selected Worker CLI is installed and works: `agy`, `pi`, or `agent` (cursor).
-* The Master's shell is bash (Linux/macOS) or PowerShell 7 (Windows).
+* The `Worker command` and `Worker report` lines at the top of `Goal-Driven.md` are set (see [Worker examples](#worker-examples)), and that Worker CLI is installed and works.
+* The Master's shell is bash (Linux/macOS) or PowerShell 7 (Windows). On macOS, `setsid` comes from util-linux, and `poll.sh` needs `stat -f %m` instead of `stat -c %Y`.
 * The `Scripts directory` line at the top of `Goal-Driven.md` is set to the absolute path of this repository's `scripts/`, and the Master can read it.
 * The Master Agent has `Goal-Driven.md` loaded as its instructions.
 
@@ -53,7 +53,6 @@ When ready, ask it to generate the task. It outputs only:
 ```text
 Goal: [[[[[ ... ]]]]]
 Criteria for success: [[[[[ ... ]]]]]
-Tool: [[[[[ agy | pi | cursor ]]]]]
 ```
 
 Review the Criteria carefully. The Master runs until every Criterion passes, so a weak Criterion produces a wrong "success". Keep a copy of the block; you need it to resume and for review.
@@ -65,21 +64,31 @@ Review the Criteria carefully. The Master runs until every Criterion passes, so 
 
 ### 3. Run the Master
 
-Send the task block to the Master. It records the baseline, creates branch `goal-driven/<task-name>` and task directory `.git/goal-driven/<task-name>/`, then runs Worker rounds.
+You do not hand the scripts to the Master in the message. The Master finds them through the `Scripts directory` line at the top of its loaded `Goal-Driven.md`, so that line must be the absolute path of this repository's `scripts/`, for example `E:/goal-driven/scripts`.
+
+Start the Master session at the target project's repository root, make sure it has `Goal-Driven.md` loaded, and send it the task block. Before the first Worker, it:
+
+1. records the baseline: HEAD, stash list, status, diff, original branch;
+2. creates branch `goal-driven/<task-name>` and task directory `.git/goal-driven/<task-name>/`;
+3. saves `task.md` (the verbatim task block) and `rules.md` (a copy of `Goal-Driven.md`) in the task directory, and copies `launch` and `poll` for its shell from the Scripts directory (`.sh` for bash, `.ps1` for PowerShell 7). If the Scripts directory is unreadable, it stops and reports.
+
+Each round, the Master writes the Worker Prompt to `logs/round-<N>-prompt.md`, starts the Worker in the background with the copied `launch`, waits for it with `poll`, then inspects the changes, verifies every Criterion, and commits accepted changes as a checkpoint.
 
 **Do not edit the workspace while it runs.** The Master would treat your edits as Worker changes.
 
 Monitor progress with:
 
-* `git log --oneline`: one checkpoint commit per verified round;
+* `git log --oneline`: a checkpoint commit for each round that left in-scope changes without regressing a passed Criterion, then a final commit once every Criterion passes;
 * `.git/goal-driven/<task-name>/state.md`: passed and unmet Criteria, failed approaches;
 * `.git/goal-driven/<task-name>/logs/`: full Worker and verification output.
 
 ### 4. Interruptions and resume
 
-The Master stops only on blockers no Worker round can fix: the Tool is unavailable, baseline changes are at risk, or a Criterion cannot be verified in the environment.
+The Master stops only on blockers no Worker round can fix: the Worker command or the Scripts directory is unavailable, baseline changes are at risk, or a Criterion cannot be verified in the environment. Lack of progress is not a stop reason; the Master changes approach instead.
 
-To resume after fixing the blocker, or after the Master session ends unexpectedly: stay on the task's `goal-driven/<task-name>` branch, start a new Master session, and send the **identical** task block. The Master continues from the last checkpoint. This also covers the Master stopping on a usage limit: it first makes sure no Worker from the previous session is still running, then inspects and verifies any unfinished round's changes before dispatching the next Worker.
+To resume after fixing the blocker, or after the Master session ends unexpectedly: stay on the task's `goal-driven/<task-name>` branch, start a new Master session, and send the **identical** task block. The Master continues from the last checkpoint. This also covers the Master stopping on a usage limit: it first makes sure no Worker from the previous session is still running, then inspects and verifies any unfinished round's changes before dispatching the next Worker. To continue with a different Worker, change the `Worker command` and `Worker report` lines first; the resumed Master uses them.
+
+While fixing the blocker, do not commit, reset, or switch branches, and leave no edits in the workspace: on resume the Master stops if HEAD is not the last checkpoint, and treats any uncommitted non-baseline change as an unfinished Worker round.
 
 ### 5. Review in a new conversation
 
@@ -111,6 +120,31 @@ git branch -D goal-driven/<task-name>    # each branch in the chain
 Task directories under `.git/goal-driven/` are never deleted automatically; remove them when no longer needed.
 
 If a baseline uncommitted change touches a file the task also changed, `git switch main` may refuse; resolve that change first.
+
+## Worker examples
+
+The Master runs the Worker given by the `Worker command` and `Worker report` lines at the top of `Goal-Driven.md`; the task block does not choose it. To use another CLI or model, replace those two lines. The launch script appends `-p <prompt>` to the command, so the CLI must accept it. Keep a streaming output mode: `poll` treats a log that stops growing as idle.
+
+agy (default):
+
+```text
+Worker command: `agy --model gemini-3.8-flash --effort high --dangerously-skip-permissions --output-format stream-json`
+Worker report: the last `{"event":"result"}` line; `result.status` and `result.response`.
+```
+
+pi:
+
+```text
+Worker command: `pi -a --model llama-local/qwen3.8-27b --mode json`
+Worker report: the last `{"type":"turn_end"}` line; the text in `message.content`.
+```
+
+cursor:
+
+```text
+Worker command: `agent --model grok-4.7-xhigh --force --print --output-format stream-json`
+Worker report: the last `{"type":"result"}` line; `is_error` and `result`.
+```
 
 ## Task directory layout
 
