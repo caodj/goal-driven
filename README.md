@@ -20,7 +20,7 @@ while (criteria not met)
 | `Criteria Task Designer.md` | Your strongest chat model | Discuss requirements, generate the task, generate follow-up tasks |
 | `Criteria Task Reviewer.md` | An agent with repository access, ideally a different model | Independently review a completed task |
 | `Goal-Driven.md` | The Master Agent | Dispatch Workers, verify every Criterion, checkpoint, commit |
-| `scripts/` | The Master Agent | Detached Worker launch and polling (`launch` / `poll`, `.sh` and `.ps1`) |
+| `scripts/` | The Master Agent; `review` by the reviewer | Detached Worker launch and polling (`launch` / `poll`), verification runs (`verify`), review evidence (`review`); `.sh` and `.ps1` |
 
 ## Prerequisites
 
@@ -70,7 +70,7 @@ Start the Master session at the target project's repository root, make sure it h
 
 1. records the baseline: HEAD, stash list, status, diff, original branch;
 2. creates branch `goal-driven/<task-name>` and task directory `.git/goal-driven/<task-name>/`;
-3. saves `task.md` (the verbatim task block) and `rules.md` (a copy of `Goal-Driven.md`) in the task directory, and copies `launch` and `poll` for its shell from the Scripts directory (`.sh` for bash, `.ps1` for PowerShell 7). If the Scripts directory is unreadable, it stops and reports.
+3. saves `task.md` (the verbatim task block) and `rules.md` (a copy of `Goal-Driven.md`) in the task directory, and copies `launch`, `poll`, `verify`, and `review` for its shell from the Scripts directory (`.sh` for bash, `.ps1` for PowerShell 7). If the Scripts directory is unreadable, it stops and reports.
 
 Each round, the Master writes the Worker Prompt to `logs/round-<N>-prompt.md`, starts the Worker in the background with the copied `launch`, waits for it with `poll`, then inspects the changes, verifies every Criterion, and commits accepted changes as a checkpoint.
 
@@ -92,7 +92,7 @@ While fixing the blocker, do not commit, reset, or switch branches, and leave no
 
 ### 5. Review in a new conversation
 
-After `SUCCESS: ALL CRITERIA MET`, open a **new** conversation in an agent that can read the repository and run `git` (for example, Cursor), paste `Criteria Task Reviewer.md`, and give it the branch `goal-driven/<task-name>`. The reviewer reads `task.md` and `state.md` from the task directory and runs the diff itself, without modifying anything.
+After `SUCCESS: ALL CRITERIA MET`, open a **new** conversation in an agent that can read the repository and run `git` (for example, Cursor), paste `Criteria Task Reviewer.md`, and give it the branch `goal-driven/<task-name>`. The reviewer reads `task.md` and `state.md` from the task directory and runs the diff itself, without modifying anything. If the task directory has the `review` script, the reviewer runs it first to collect this evidence in one call; its risk scan only gives hints, and the reviewer still reads the full diff.
 
 A separate reviewer prompt and conversation keep the review independent of the design discussion and save the design conversation's context. Using a different model than the designer reduces shared blind spots. If the reviewer has no repository access, provide the task block, `git diff <baseline>..goal-driven/<task-name>` (baseline HEAD from `state.md`), and `state.md` yourself; for a large diff, send `git diff --stat` first, then files on request.
 
@@ -154,14 +154,14 @@ Worker report: the last `{"type":"result"}` line; `is_error` and `result`.
 ├── task.md         # verbatim task block
 ├── rules.md        # copy of Goal-Driven.md used by this task
 ├── state.md        # goal, status, checkpoints, Criteria, failed approaches
-├── launch.* poll.*  # copied from scripts/ for the Master's shell (.sh or .ps1)
+├── launch.* poll.* verify.* review.*  # copied from scripts/ for the Master's shell (.sh or .ps1)
 └── logs/
     ├── round-<N>-prompt.md     # this round's Worker Prompt
     ├── round-<N>-worker.pid    # Worker wrapper PID; mtime is the start time
     ├── round-<N>-worker.log    # raw Worker output (streamed events)
     ├── round-<N>-worker.exit   # Worker exit code, written only after exit
     ├── round-<N>-worker.progress  # workspace fingerprint, rewritten only on change; mtime is the last progress time
-    └── round-<N>-verify.log
+    └── round-<N>-verify-<label>.log  # full output of one verification command
 ```
 
 Everything lives inside `.git/`, so it is never tracked or committed. One branch maps to one task directory; a new Goal always gets a new one.

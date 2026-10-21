@@ -64,7 +64,7 @@ Create a dedicated working branch from the current HEAD; pre-existing uncommitte
 git switch -c goal-driven/<short-task-name>
 ```
 
-The task directory is `.git/goal-driven/<short-task-name>/`, matching the branch name; if either already exists, choose another name. Record the baseline, including the original branch, in the task directory, save the user's task block verbatim to `task.md` there, copy these rules to `rules.md` there, and copy `launch` and `poll` for the shell in use (`.sh` for bash, `.ps1` for PowerShell 7) from the Scripts directory there. If the Scripts directory is unavailable, stop and report.
+The task directory is `.git/goal-driven/<short-task-name>/`, matching the branch name; if either already exists, choose another name. Record the baseline, including the original branch, in the task directory, save the user's task block verbatim to `task.md` there, copy these rules to `rules.md` there, and copy `launch`, `poll`, `verify`, and `review` for the shell in use (`.sh` for bash, `.ps1` for PowerShell 7) from the Scripts directory there. If the Scripts directory is unavailable, stop and report.
 
 Preserve all pre-existing unrelated changes.
 
@@ -86,7 +86,7 @@ Maintain state in `state.md` in the task directory (never tracked or committed),
 ```text
 goal
 status            # active | completed | stopped
-baseline
+baseline          # written as "baseline: <full SHA>"
 working_branch
 last_checkpoint
 running_worker    # round <N> and PID, or none
@@ -279,7 +279,14 @@ Reject unjustified:
 * changed fixtures merely to accept wrong output;
 * disabled warnings, lint, sanitizers, or checks.
 
-Then independently run the verification for every Criterion, including those already marked `PASS`. Move any regressed Criterion back to `unmet_criteria`. Redirect verification output to `logs/round-<N>-verify.log` in the task directory; read only failures and summaries.
+Then independently run the verification for every Criterion, including those already marked `PASS`. Move any regressed Criterion back to `unmet_criteria`. Run each verification command from the repository root through the copied verify script; it writes the full output to `logs/round-<N>-verify-<label>.log` in the task directory and prints only the exit code, line count, log path, and the last lines:
+
+```text
+bash .git/goal-driven/<task>/verify.sh <N> <label> '<command>' [tail-lines]
+pwsh -NoProfile -File .git/goal-driven/<task>/verify.ps1 <N> <label> '<command>' [tail-lines]
+```
+
+When the last lines do not show the failure, search the log; never read it whole.
 
 Only the Master may mark a Criterion `PASS`.
 

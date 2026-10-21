@@ -20,7 +20,7 @@ while (criteria not met)
 | `Criteria Task Designer.md` | 你最强的对话模型 | 聊需求、生成任务、生成后续任务 |
 | `Criteria Task Reviewer.md` | 能访问仓库的 Agent，最好与设计用的模型不同 | 独立审核已完成的任务 |
 | `Goal-Driven.md` | Master Agent | 派发 Worker、验证每条 Criterion、存检查点、提交 |
-| `scripts/` | Master Agent | 后台启动和轮询 Worker（`launch` / `poll`，分 `.sh` 和 `.ps1`） |
+| `scripts/` | Master Agent；`review` 给审核用 | 后台启动和轮询 Worker（`launch` / `poll`）、运行验证（`verify`）、审核取证（`review`），分 `.sh` 和 `.ps1` |
 
 ## 前置条件
 
@@ -70,7 +70,7 @@ Criteria for success: [[[[[ ... ]]]]]
 
 1. 记录基线：HEAD、stash 列表、status、diff、原始分支；
 2. 新建分支 `goal-driven/<任务名>` 和任务目录 `.git/goal-driven/<任务名>/`；
-3. 在任务目录里保存 `task.md`（两段文本原文）和 `rules.md`（`Goal-Driven.md` 副本），并按自己的 shell 从 Scripts 目录复制 `launch` 和 `poll`（bash 用 `.sh`，PowerShell 7 用 `.ps1`）。读不到 Scripts 目录时，它会停下报告。
+3. 在任务目录里保存 `task.md`（两段文本原文）和 `rules.md`（`Goal-Driven.md` 副本），并按自己的 shell 从 Scripts 目录复制 `launch`、`poll`、`verify` 和 `review`（bash 用 `.sh`，PowerShell 7 用 `.ps1`）。读不到 Scripts 目录时，它会停下报告。
 
 之后每一轮，Master 把 Worker Prompt 写入 `logs/round-<N>-prompt.md`，用复制来的 `launch` 在后台启动 Worker，用 `poll` 等它结束，再检查改动、验证每条 Criterion，合格的改动提交为检查点。
 
@@ -92,7 +92,7 @@ Master 只会因为 Worker 无法解决的外部阻塞而停下：Worker 命令�
 
 ### 5. 新开对话审核
 
-Master 输出 `SUCCESS: ALL CRITERIA MET` 后，在能读取仓库、能运行 `git` 的 Agent（例如 Cursor）里**新开**一个对话，粘贴 `Criteria Task Reviewer.md`，并告诉它分支名 `goal-driven/<任务名>`。审核会自己读取任务目录里的 `task.md` 和 `state.md`，自己运行 diff，不修改任何内容。
+Master 输出 `SUCCESS: ALL CRITERIA MET` 后，在能读取仓库、能运行 `git` 的 Agent（例如 Cursor）里**新开**一个对话，粘贴 `Criteria Task Reviewer.md`，并告诉它分支名 `goal-driven/<任务名>`。审核会自己读取任务目录里的 `task.md` 和 `state.md`，自己运行 diff，不修改任何内容。任务目录里有 `review` 脚本时，审核会先用它一次性取证；它的风险扫描只是提示，审核仍会通读 diff。
 
 独立的审核提示词和对话能让审核不受设计讨论的影响，也能节省设计对话的上下文。审核换一个和设计不同的模型，能减少两边盲点重合。如果审核无法访问仓库，就自己提供任务的两段文本、`git diff <基线>..goal-driven/<任务名>`（基线 HEAD 见 `state.md`）和 `state.md`；diff 太大时，先发 `git diff --stat`，再按它的要求逐个文件补充。
 
@@ -154,14 +154,14 @@ Worker report: the last `{"type":"result"}` line; `is_error` and `result`.
 ├── task.md         # 一字不差的任务两段文本
 ├── rules.md        # 本任务使用的 Goal-Driven.md 副本
 ├── state.md        # 目标、状态、检查点、Criteria、失败过的方案
-├── launch.* poll.*  # 按 Master 的 shell 从 scripts/ 复制的启动和轮询脚本（.sh 或 .ps1）
+├── launch.* poll.* verify.* review.*  # 按 Master 的 shell 从 scripts/ 复制的脚本（.sh 或 .ps1）
 └── logs/
     ├── round-<N>-prompt.md     # 本轮 Worker Prompt
     ├── round-<N>-worker.pid    # Worker 包装进程 PID，修改时间即启动时间
     ├── round-<N>-worker.log    # Worker 原始输出（流式事件）
     ├── round-<N>-worker.exit   # Worker 退出码，仅在退出后写入
     ├── round-<N>-worker.progress  # 工作区指纹，仅在变化时重写，修改时间即最后进展时间
-    └── round-<N>-verify.log
+    └── round-<N>-verify-<label>.log  # 一条验证命令的完整输出
 ```
 
 这些文件都在 `.git/` 里，不会被 git 追踪或提交。一个分支对应一个任务目录，新的 Goal 一定会用新目录。

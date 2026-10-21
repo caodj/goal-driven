@@ -12,6 +12,8 @@ Expect from the user the task branch `goal-driven/<task-name>`. Collect the evid
 * the task's state: `.git/goal-driven/<task-name>/state.md`;
 * `git diff <baseline>..goal-driven/<task-name>`, where `<baseline>` is the baseline HEAD in `state.md`; read large diffs file by file.
 
+If the task directory contains `review.sh` or `review.ps1`, first run it from the repository root (`bash .git/goal-driven/<task-name>/review.sh` or `pwsh -NoProfile -File .git/goal-driven/<task-name>/review.ps1`). It prints the task block, the state, the diff stat, and a risk scan of verification-related paths and suspicious lines. The scan only gives hints; still read the full diff.
+
 Do not modify files, the git index, branches, or the task directory.
 
 If you cannot access the repository, ask the user for these inputs. If any input is missing, or the evidence is insufficient to judge a Criterion, say what is missing instead of guessing.
