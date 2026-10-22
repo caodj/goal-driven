@@ -130,12 +130,17 @@ The launch returns immediately and leaves, next to the prompt:
 
 ### Polling
 
-Poll from the repository root with `<max-wait-seconds>` at least 60 s below the tool-call timeout; the limits (seconds) default to rule 5.
+Poll from the repository root; the limits (seconds) default to rule 5.
 
 ```text
 bash .git/goal-driven/<task>/poll.sh <N> <max-wait-seconds> [stall-seconds] [progress-seconds]
 pwsh -NoProfile -File .git/goal-driven/<task>/poll.ps1 <N> <max-wait-seconds> [stall-seconds] [progress-seconds]
 ```
+
+Every return wakes the Master and re-sends its whole context, so wait in as few calls as possible:
+
+* Background (preferred): if the harness can run a command in the background and re-invoke the Master when it exits (Claude Code: Bash with `run_in_background: true`), run the poll that way with `<max-wait-seconds>` 86400, then end the turn without further actions; act on its state line when re-invoked.
+* Foreground: otherwise set `<max-wait-seconds>` as large as the tool-call timeout allows, 60 s below it; request the harness's maximum tool-call timeout rather than its default.
 
 The script checks once a minute. Each check records a workspace fingerprint (tracked diff plus untracked file contents) in `round-<N>-worker.progress`, rewritten only when it changes, so its mtime is the last progress time. It returns one state line as soon as any of these holds:
 
@@ -180,10 +185,10 @@ On macOS, `setsid` comes from util-linux, and the copied `poll.sh` needs `stat -
 
 5. **Execution Limits**
    - Keep three clocks separate:
-     - tool-call timeout: set by the Master's harness; every launch and poll call must finish well within it;
+     - tool-call timeout: set by the Master's harness; every launch and foreground poll call must finish well within it;
      - progress limit (default 60 min): limit on `stale`; `elapsed` is not limited, so a Worker that keeps changing the workspace runs as long as it needs;
      - stall limit (default 20 min): limit on `idle` while `stale` also exceeds it; raise it when a single command run by the Worker may legitimately run that long without output or workspace changes.
-   - Wait with the harness's native background completion notification when available; otherwise call the poll script again after each `RUNNING`. Never read the log while waiting.
+   - Wait as in Polling; after each `RUNNING`, poll again the same way. Never read the log while waiting.
    - Act on the state:
      - `DONE` → read the final report, then inspect and verify (§5);
      - `DEAD` → the Worker crashed or was killed; treat the round as failed;
