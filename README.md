@@ -29,6 +29,7 @@ while (criteria not met)
 * The Master's shell is bash (Linux/macOS) or PowerShell 7 (Windows). On macOS, `setsid` comes from util-linux, and `poll.sh` needs `stat -f %m` instead of `stat -c %Y`.
 * The `Scripts directory` line at the top of `Goal-Driven.md` is set to the absolute path of this repository's `scripts/`, and the Master can read it.
 * The Master Agent has `Goal-Driven.md` loaded as its instructions.
+* With Codex as the Master, set `background_terminal_max_timeout = 3600000` in `~/.codex/config.toml`; otherwise each wait on a running command is capped at 5 minutes.
 
 ## Workflow
 

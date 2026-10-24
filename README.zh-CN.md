@@ -29,6 +29,7 @@ while (criteria not met)
 * Master 使用的 shell 是 bash（Linux/macOS）或 PowerShell 7（Windows）。macOS 上 `setsid` 需要从 util-linux 获取，`poll.sh` 里的 `stat -c %Y` 要换成 `stat -f %m`。
 * `Goal-Driven.md` 顶部的 `Scripts directory` 一行已改成本仓库 `scripts/` 的绝对路径，且 Master 能读取该目录。
 * Master Agent 已加载 `Goal-Driven.md` 作为指令。
+* Master 用 Codex 时，在 `~/.codex/config.toml` 里设置 `background_terminal_max_timeout = 3600000`；否则每次等待运行中的命令最多 5 分钟。
 
 ## 工作流程
 

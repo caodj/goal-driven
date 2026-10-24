@@ -140,6 +140,7 @@ pwsh -NoProfile -File .git/goal-driven/<task>/poll.ps1 <N> <max-wait-seconds> [s
 Every return wakes the Master and re-sends its whole context, so wait in as few calls as possible:
 
 * Background (preferred): if the harness can run a command in the background and re-invoke the Master when it exits (Claude Code: Bash with `run_in_background: true`), run the poll that way with `<max-wait-seconds>` 86400, then end the turn without further actions; act on its state line when re-invoked.
+* Yielding: if the harness hands a still-running command back and lets you wait on it again (Codex: `wait`, `write_stdin`), each hand-back also wakes you; run the poll with `<max-wait-seconds>` 86400 and request a 3600000 ms wait (or the harness's maximum, if lower) on every wait, never the default.
 * Foreground: otherwise set `<max-wait-seconds>` as large as the tool-call timeout allows, 60 s below it; request the harness's maximum tool-call timeout rather than its default.
 
 The script checks once a minute. Each check records a workspace fingerprint (tracked diff plus untracked file contents) in `round-<N>-worker.progress`, rewritten only when it changes, so its mtime is the last progress time. It returns one state line as soon as any of these holds:
