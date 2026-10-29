@@ -25,7 +25,7 @@ while (criteria not met)
 ## 前置条件
 
 * 目标项目是一个 git 仓库。
-* `Goal-Driven.md` 顶部的 `Worker command` 和 `Worker report` 两行已设置好（见 [Worker 示例](#worker-示例)），且对应的 Worker 命令行工具已安装并能正常运行。
+* `Goal-Driven.md` 顶部的 `Worker command`、`Worker report`、`Worker retryable` 和 `Worker resume` 四行已设置好（见 [Worker 示例](#worker-示例)），且对应的 Worker 命令行工具已安装并能正常运行。
 * Master 使用的 shell 是 bash（Linux/macOS）或 PowerShell 7（Windows）。macOS 上 `setsid` 需要从 util-linux 获取，`poll.sh` 里的 `stat -c %Y` 要换成 `stat -f %m`。
 * `Goal-Driven.md` 顶部的 `Scripts directory` 一行已改成本仓库 `scripts/` 的绝对路径，且 Master 能读取该目录。
 * Master Agent 已加载 `Goal-Driven.md` 作为指令。
@@ -87,7 +87,7 @@ Criteria for success: [[[[[ ... ]]]]]
 
 Master 只会因为 Worker 无法解决的外部阻塞而停下：Worker 命令或 Scripts 目录不可用、基线修改有丢失风险、某条 Criterion 在当前环境无法验证。没有进展不算停下的理由，Master 会换个方法继续。
 
-处理完阻塞后，或者 Master 会话意外断开后：停在该任务的 `goal-driven/<任务名>` 分支上，新开 Master 会话，发送**一字不差**的两段文本。Master 会从最后一个检查点接着跑。Master 因额度用完而停掉也按这个方法恢复：它会先确认上一个会话留下的 Worker 已不在运行，再检查、验证未完成那一轮的改动，然后才派下一个 Worker。想换一个 Worker 接着跑，先改好 `Worker command` 和 `Worker report` 两行，恢复后的 Master 会用新的设置。
+处理完阻塞后，或者 Master 会话意外断开后：停在该任务的 `goal-driven/<任务名>` 分支上，新开 Master 会话，发送**一字不差**的两段文本。Master 会从最后一个检查点接着跑。Master 因额度用完而停掉也按这个方法恢复：它会先确认上一个会话留下的 Worker 已不在运行，再检查、验证未完成那一轮的改动，然后才派下一个 Worker。想换一个 Worker 接着跑，先改好 `Worker command`、`Worker report`、`Worker retryable` 和 `Worker resume` 四行，恢复后的 Master 会用新的设置。
 
 处理阻塞期间，不要在分支上提交、重置或切换分支，也不要在工作区留下改动：恢复时如果 HEAD 不是最后一个检查点，Master 会直接停下；未提交的非基线改动会被当成未完成那一轮 Worker 的改动处理。
 
@@ -124,13 +124,15 @@ git branch -D goal-driven/<任务名>    # 这一串里的每个分支
 
 ## Worker 示例
 
-Master 使用哪个 Worker，由 `Goal-Driven.md` 顶部的 `Worker command` 和 `Worker report` 两行决定，任务文本不负责选择。要换命令行工具或模型，替换这两行即可。启动脚本会在命令末尾追加 `-p <提示词>`，所以该工具必须支持这种用法。输出要保持流式：日志不再增长时，`poll` 会把 Worker 视为空闲。
+Master 使用哪个 Worker，由 `Goal-Driven.md` 顶部的 `Worker command`、`Worker report`、`Worker retryable` 和 `Worker resume` 四行决定，任务文本不负责选择。要换命令行工具或模型，替换这四行即可。`Worker retryable` 描述哪些 Worker 报告属于基础设施的瞬时故障；遇到这类失败，Master 直接派下一轮，不把它当作方法失败。`Worker resume` 给出在下一轮接续被中断会话的参数；没有它时，下一轮派全新 Worker。工具没有这类故障或选项时，对应一行写 `none`。启动脚本会在命令末尾追加 `-p <提示词>`，所以该工具必须支持这种用法。输出要保持流式：日志不再增长时，`poll` 会把 Worker 视为空闲。
 
 agy（默认）：
 
 ```text
 Worker command: `agy --model gemini-3.8-flash --effort high --dangerously-skip-permissions --output-format stream-json`
 Worker report: the last `{"event":"result"}` line; `result.status` and `result.response`.
+Worker retryable: `result.status` is `ERROR` and `result.error` contains `UNAUTHENTICATED (code 401)`.
+Worker resume: `--conversation <result.conversation_id>`
 ```
 
 pi：
@@ -138,6 +140,8 @@ pi：
 ```text
 Worker command: `pi -a --model llama-local/qwen3.8-27b --mode json`
 Worker report: the last `{"type":"turn_end"}` line; the text in `message.content`.
+Worker retryable: none.
+Worker resume: none.
 ```
 
 cursor：
@@ -145,6 +149,8 @@ cursor：
 ```text
 Worker command: `agent --model grok-4.7-xhigh --force --print --output-format stream-json`
 Worker report: the last `{"type":"result"}` line; `is_error` and `result`.
+Worker retryable: none.
+Worker resume: none.
 ```
 
 ## 任务目录结构

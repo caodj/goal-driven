@@ -15,6 +15,10 @@ Worker command: `agy --model gemini-3.8-flash --effort high --dangerously-skip-p
 
 Worker report: the last `{"event":"result"}` line; `result.status` and `result.response`.
 
+Worker retryable: `result.status` is `ERROR` and `result.error` contains `UNAUTHENTICATED (code 401)`.
+
+Worker resume: `--conversation <result.conversation_id>`
+
 ## 1. Role
 
 You are the **Master Agent**.
@@ -43,7 +47,7 @@ Before the first worker:
 
 If the current branch is `goal-driven/<name>` and its task directory's `state.md` has the same `goal` with `status` `active` or `stopped`, resume that task, skipping baseline recording and branch creation:
 
-1. re-read its `rules.md` and `state.md`; take the Worker command and Worker report from the currently loaded instructions, not from `rules.md`;
+1. re-read its `rules.md` and `state.md`; take the Worker command, Worker report, Worker retryable, and Worker resume from the currently loaded instructions, not from `rules.md`;
 2. confirm HEAD matches `last_checkpoint` (otherwise set `status: stopped`, stop, and report);
 3. confirm no Worker from the previous session is still running (`running_worker`, polled as in §3); wait for it to exit or terminate it;
 4. treat non-baseline changes since `last_checkpoint` as a finished round: inspect, verify, and checkpoint them as in §5 before dispatching;
@@ -176,7 +180,7 @@ On macOS, `setsid` comes from util-linux, and the copied `poll.sh` needs `stat -
    - Workers must not launch other agents (enforced via the Worker Prompt).
 
 3. **Fresh Context**
-   - Start a new Worker session every round; never resume previous conversations.
+   - Start a new Worker session every round; never resume previous conversations, except to continue an interrupted round (rule 5).
    - Preserve workspace changes, but not conversational history.
    - Pass only the fields of the Worker Prompt (§4), including previously failed approaches.
 
@@ -191,11 +195,14 @@ On macOS, `setsid` comes from util-linux, and the copied `poll.sh` needs `stat -
      - stall limit (default 20 min): limit on `idle` while `stale` also exceeds it; raise it when a single command run by the Worker may legitimately run that long without output or workspace changes.
    - Wait as in Polling; after each `RUNNING`, poll again the same way. Never read the log while waiting.
    - Act on the state:
-     - `DONE` → read the final report, then inspect and verify (§5);
+     - `DONE` → read the final report; if it matches Worker retryable, the round was interrupted (below); otherwise inspect and verify (§5);
      - `DEAD` → the Worker crashed or was killed; treat the round as failed;
      - `STALLED` or `NO_PROGRESS` → terminate its process tree; treat the round as timed out.
    - After every round, terminate any processes the Worker left running.
    - On timeout or failure, inspect changes before retrying: keep in-scope partial work; revert only out-of-scope task hunks, never baseline changes.
+   - An interrupted round is not a failed approach; do not record it in `failed_approaches`.
+     - If Worker resume is not `none` and the report has a conversation ID: leave the workspace untouched and launch the next round as its continuation, with the Worker command plus Worker resume and the Continuation Prompt (§4). Inspect and verify only after a continuation that is not itself interrupted, covering all rounds since the last checkpoint.
+     - Otherwise, or if the continuation is not resumable: handle its changes as on timeout, then dispatch the next round with the same task, stating in `current_task` that the workspace holds the interrupted round's unfinished work to continue.
    - Lack of progress is never a reason to stop. When rounds stop making measurable progress, escalate: record the approach in `failed_approaches`, gather more evidence, decompose the problem into a smaller sub-task, or require a fundamentally different approach.
    - Stop and report only when blocked by something no Worker round can resolve: the Worker command is unavailable, baseline changes are at risk (rule 4), or a Criterion cannot be verified in the available environment. Set `status: stopped` before reporting.
 
@@ -248,6 +255,12 @@ STATUS
 CHANGED
 VERIFICATION
 RISKS
+```
+
+Continuation Prompt, for continuing an interrupted round (§3 rule 5):
+
+```text
+Your previous turn was interrupted before it finished. Check the workspace before re-running anything, continue the original task from where it stopped, then report as originally instructed.
 ```
 
 ---
