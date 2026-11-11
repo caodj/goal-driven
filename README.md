@@ -20,12 +20,12 @@ while (criteria not met)
 | `Criteria Task Designer.md` | Your strongest chat model | Discuss requirements, generate the task, generate follow-up tasks |
 | `Criteria Task Reviewer.md` | An agent with repository access, ideally a different model | Independently review a completed task |
 | `Goal-Driven.md` | The Master Agent | Dispatch Workers, verify every Criterion, checkpoint, commit |
-| `scripts/` | The Master Agent; `review` by the reviewer | Detached Worker launch and polling (`launch` / `poll`), verification runs (`verify`), review evidence (`review`); `.sh` and `.ps1` |
+| `scripts/` | The Master Agent | Detached Worker launch and polling (`launch` / `poll`), verification runs (`verify`); `.sh` and `.ps1` |
 
 ## Prerequisites
 
 * The target project is a git repository.
-* The `Worker command`, `Worker report`, `Worker retryable`, and `Worker resume` lines at the top of `Goal-Driven.md` are set (see [Worker examples](#worker-examples)), and that Worker CLI is installed and works.
+* The `Worker command` and `Worker report` lines at the top of `Goal-Driven.md` are set (see [Worker examples](#worker-examples)), and that Worker CLI is installed and works.
 * The Master's shell is bash (Linux/macOS) or PowerShell 7 (Windows). On macOS, `setsid` comes from util-linux, and `poll.sh` needs `stat -f %m` instead of `stat -c %Y`.
 * The `Scripts directory` line at the top of `Goal-Driven.md` is set to the absolute path of this repository's `scripts/`, and the Master can read it.
 * The Master Agent has `Goal-Driven.md` loaded as its instructions.
@@ -71,7 +71,7 @@ Start the Master session at the target project's repository root, make sure it h
 
 1. records the baseline: HEAD, stash list, status, diff, original branch;
 2. creates branch `goal-driven/<task-name>` and task directory `.git/goal-driven/<task-name>/`;
-3. saves `task.md` (the verbatim task block) and `rules.md` (a copy of `Goal-Driven.md`) in the task directory, and copies `launch`, `poll`, `verify`, and `review` for its shell from the Scripts directory (`.sh` for bash, `.ps1` for PowerShell 7). If the Scripts directory is unreadable, it stops and reports.
+3. saves `task.md` (the verbatim task block) in the task directory, and copies `launch`, `poll`, and `verify` for its shell from the Scripts directory (`.sh` for bash, `.ps1` for PowerShell 7). If the Scripts directory is unreadable, it stops and reports.
 
 Each round, the Master writes the Worker Prompt to `logs/round-<N>-prompt.md`, starts the Worker in the background with the copied `launch`, waits for it with `poll`, then inspects the changes, verifies every Criterion, and commits accepted changes as a checkpoint.
 
@@ -87,13 +87,13 @@ Monitor progress with:
 
 The Master stops only on blockers no Worker round can fix: the Worker command or the Scripts directory is unavailable, baseline changes are at risk, or a Criterion cannot be verified in the environment. Lack of progress is not a stop reason; the Master changes approach instead.
 
-To resume after fixing the blocker, or after the Master session ends unexpectedly: stay on the task's `goal-driven/<task-name>` branch, start a new Master session, and send the **identical** task block. The Master continues from the last checkpoint. This also covers the Master stopping on a usage limit: it first makes sure no Worker from the previous session is still running, then inspects and verifies any unfinished round's changes before dispatching the next Worker. To continue with a different Worker, change the `Worker command`, `Worker report`, `Worker retryable`, and `Worker resume` lines first; the resumed Master uses them.
+To resume after fixing the blocker, or after the Master session ends unexpectedly: stay on the task's `goal-driven/<task-name>` branch, start a new Master session, and send the **identical** task block. The Master continues from the last checkpoint. This also covers the Master stopping on a usage limit: it first makes sure no Worker from the previous session is still running, then inspects and verifies any unfinished round's changes before dispatching the next Worker. To continue with a different Worker, change the `Worker command` and `Worker report` lines first; the resumed Master uses them.
 
 While fixing the blocker, do not commit, reset, or switch branches, and leave no edits in the workspace: on resume the Master stops if HEAD is not the last checkpoint, and treats any uncommitted non-baseline change as an unfinished Worker round.
 
 ### 5. Review in a new conversation
 
-After `SUCCESS: ALL CRITERIA MET`, open a **new** conversation in an agent that can read the repository and run `git` (for example, Cursor), paste `Criteria Task Reviewer.md`, and give it the branch `goal-driven/<task-name>`. The reviewer reads `task.md` and `state.md` from the task directory and runs the diff itself, without modifying anything. If the task directory has the `review` script, the reviewer runs it first to collect this evidence in one call; its risk scan only gives hints, and the reviewer still reads the full diff.
+After `SUCCESS: ALL CRITERIA MET`, open a **new** conversation in an agent that can read the repository and run `git` (for example, Cursor), paste `Criteria Task Reviewer.md`, and give it the branch `goal-driven/<task-name>`. The reviewer reads `task.md` and `state.md` from the task directory and runs the diff itself, without modifying anything.
 
 A separate reviewer prompt and conversation keep the review independent of the design discussion and save the design conversation's context. Using a different model than the designer reduces shared blind spots. If the reviewer has no repository access, provide the task block, `git diff <baseline>..goal-driven/<task-name>` (baseline HEAD from `state.md`), and `state.md` yourself; for a large diff, send `git diff --stat` first, then files on request.
 
@@ -105,7 +105,7 @@ Paste the findings you accept back into the design conversation and ask for a fo
 
 If you generate it in a new conversation instead, paste every earlier task block of the chain too.
 
-Then stay on the previous `goal-driven/*` branch and send the follow-up block to the Master. When it asks whether to stack on that branch, choose stack. Repeat review and follow-up until the review passes.
+Then stay on the previous `goal-driven/*` branch and send the follow-up block to the Master; it branches from there. Repeat review and follow-up until the review passes.
 
 ### 7. Merge and clean up
 
@@ -124,15 +124,13 @@ If a baseline uncommitted change touches a file the task also changed, `git swit
 
 ## Worker examples
 
-The Master runs the Worker given by the `Worker command`, `Worker report`, `Worker retryable`, and `Worker resume` lines at the top of `Goal-Driven.md`; the task block does not choose it. To use another CLI or model, replace those four lines. `Worker retryable` describes reports of transient infrastructure failures; the Master dispatches the next round for them instead of treating the approach as failed. `Worker resume` gives the arguments that continue the interrupted conversation in that next round; without it, the next round starts a fresh Worker. Write `none` for either if the CLI has no such failure or option. The launch script appends `-p <prompt>` to the command, so the CLI must accept it. Keep a streaming output mode: `poll` treats a log that stops growing as idle.
+The Master runs the Worker given by the `Worker command` and `Worker report` lines at the top of `Goal-Driven.md`; the task block does not choose it. To use another CLI or model, replace those two lines. The launch script appends `-p <prompt>` to the command, so the CLI must accept it.
 
 agy (default):
 
 ```text
 Worker command: `agy --model gemini-3.8-flash --effort high --dangerously-skip-permissions --output-format stream-json`
 Worker report: the last `{"event":"result"}` line; `result.status` and `result.response`.
-Worker retryable: `result.status` is `ERROR` and `result.error` contains `UNAUTHENTICATED (code 401)`.
-Worker resume: `--conversation <result.conversation_id>`
 ```
 
 pi:
@@ -140,8 +138,6 @@ pi:
 ```text
 Worker command: `pi -a --model llama-local/qwen3.8-27b --mode json`
 Worker report: the last `{"type":"turn_end"}` line; the text in `message.content`.
-Worker retryable: none.
-Worker resume: none.
 ```
 
 cursor:
@@ -149,8 +145,6 @@ cursor:
 ```text
 Worker command: `agent --model grok-4.7-xhigh --force --print --output-format stream-json`
 Worker report: the last `{"type":"result"}` line; `is_error` and `result`.
-Worker retryable: none.
-Worker resume: none.
 ```
 
 ## Task directory layout
@@ -159,9 +153,8 @@ Worker resume: none.
 .git/goal-driven/<task-name>/
 ├── <baseline>      # HEAD, stash list, status, diff, original branch (named by the Master)
 ├── task.md         # verbatim task block
-├── rules.md        # copy of Goal-Driven.md used by this task
 ├── state.md        # goal, status, checkpoints, Criteria, failed approaches
-├── launch.* poll.* verify.* review.*  # copied from scripts/ for the Master's shell (.sh or .ps1)
+├── launch.* poll.* verify.*  # copied from scripts/ for the Master's shell (.sh or .ps1)
 └── logs/
     ├── round-<N>-prompt.md     # this round's Worker Prompt
     ├── round-<N>-worker.pid    # Worker wrapper PID; mtime is the start time

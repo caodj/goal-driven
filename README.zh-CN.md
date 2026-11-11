@@ -20,12 +20,12 @@ while (criteria not met)
 | `Criteria Task Designer.md` | 你最强的对话模型 | 聊需求、生成任务、生成后续任务 |
 | `Criteria Task Reviewer.md` | 能访问仓库的 Agent，最好与设计用的模型不同 | 独立审核已完成的任务 |
 | `Goal-Driven.md` | Master Agent | 派发 Worker、验证每条 Criterion、存检查点、提交 |
-| `scripts/` | Master Agent；`review` 给审核用 | 后台启动和轮询 Worker（`launch` / `poll`）、运行验证（`verify`）、审核取证（`review`），分 `.sh` 和 `.ps1` |
+| `scripts/` | Master Agent | 后台启动和轮询 Worker（`launch` / `poll`）、运行验证（`verify`），分 `.sh` 和 `.ps1` |
 
 ## 前置条件
 
 * 目标项目是一个 git 仓库。
-* `Goal-Driven.md` 顶部的 `Worker command`、`Worker report`、`Worker retryable` 和 `Worker resume` 四行已设置好（见 [Worker 示例](#worker-示例)），且对应的 Worker 命令行工具已安装并能正常运行。
+* `Goal-Driven.md` 顶部的 `Worker command` 和 `Worker report` 两行已设置好（见 [Worker 示例](#worker-示例)），且对应的 Worker 命令行工具已安装并能正常运行。
 * Master 使用的 shell 是 bash（Linux/macOS）或 PowerShell 7（Windows）。macOS 上 `setsid` 需要从 util-linux 获取，`poll.sh` 里的 `stat -c %Y` 要换成 `stat -f %m`。
 * `Goal-Driven.md` 顶部的 `Scripts directory` 一行已改成本仓库 `scripts/` 的绝对路径，且 Master 能读取该目录。
 * Master Agent 已加载 `Goal-Driven.md` 作为指令。
@@ -71,7 +71,7 @@ Criteria for success: [[[[[ ... ]]]]]
 
 1. 记录基线：HEAD、stash 列表、status、diff、原始分支；
 2. 新建分支 `goal-driven/<任务名>` 和任务目录 `.git/goal-driven/<任务名>/`；
-3. 在任务目录里保存 `task.md`（两段文本原文）和 `rules.md`（`Goal-Driven.md` 副本），并按自己的 shell 从 Scripts 目录复制 `launch`、`poll`、`verify` 和 `review`（bash 用 `.sh`，PowerShell 7 用 `.ps1`）。读不到 Scripts 目录时，它会停下报告。
+3. 在任务目录里保存 `task.md`（两段文本原文），并按自己的 shell 从 Scripts 目录复制 `launch`、`poll` 和 `verify`（bash 用 `.sh`，PowerShell 7 用 `.ps1`）。读不到 Scripts 目录时，它会停下报告。
 
 之后每一轮，Master 把 Worker Prompt 写入 `logs/round-<N>-prompt.md`，用复制来的 `launch` 在后台启动 Worker，用 `poll` 等它结束，再检查改动、验证每条 Criterion，合格的改动提交为检查点。
 
@@ -87,13 +87,13 @@ Criteria for success: [[[[[ ... ]]]]]
 
 Master 只会因为 Worker 无法解决的外部阻塞而停下：Worker 命令或 Scripts 目录不可用、基线修改有丢失风险、某条 Criterion 在当前环境无法验证。没有进展不算停下的理由，Master 会换个方法继续。
 
-处理完阻塞后，或者 Master 会话意外断开后：停在该任务的 `goal-driven/<任务名>` 分支上，新开 Master 会话，发送**一字不差**的两段文本。Master 会从最后一个检查点接着跑。Master 因额度用完而停掉也按这个方法恢复：它会先确认上一个会话留下的 Worker 已不在运行，再检查、验证未完成那一轮的改动，然后才派下一个 Worker。想换一个 Worker 接着跑，先改好 `Worker command`、`Worker report`、`Worker retryable` 和 `Worker resume` 四行，恢复后的 Master 会用新的设置。
+处理完阻塞后，或者 Master 会话意外断开后：停在该任务的 `goal-driven/<任务名>` 分支上，新开 Master 会话，发送**一字不差**的两段文本。Master 会从最后一个检查点接着跑。Master 因额度用完而停掉也按这个方法恢复：它会先确认上一个会话留下的 Worker 已不在运行，再检查、验证未完成那一轮的改动，然后才派下一个 Worker。想换一个 Worker 接着跑，先改好 `Worker command` 和 `Worker report` 两行，恢复后的 Master 会用新的设置。
 
 处理阻塞期间，不要在分支上提交、重置或切换分支，也不要在工作区留下改动：恢复时如果 HEAD 不是最后一个检查点，Master 会直接停下；未提交的非基线改动会被当成未完成那一轮 Worker 的改动处理。
 
 ### 5. 新开对话审核
 
-Master 输出 `SUCCESS: ALL CRITERIA MET` 后，在能读取仓库、能运行 `git` 的 Agent（例如 Cursor）里**新开**一个对话，粘贴 `Criteria Task Reviewer.md`，并告诉它分支名 `goal-driven/<任务名>`。审核会自己读取任务目录里的 `task.md` 和 `state.md`，自己运行 diff，不修改任何内容。任务目录里有 `review` 脚本时，审核会先用它一次性取证；它的风险扫描只是提示，审核仍会通读 diff。
+Master 输出 `SUCCESS: ALL CRITERIA MET` 后，在能读取仓库、能运行 `git` 的 Agent（例如 Cursor）里**新开**一个对话，粘贴 `Criteria Task Reviewer.md`，并告诉它分支名 `goal-driven/<任务名>`。审核会自己读取任务目录里的 `task.md` 和 `state.md`，自己运行 diff，不修改任何内容。
 
 独立的审核提示词和对话能让审核不受设计讨论的影响，也能节省设计对话的上下文。审核换一个和设计不同的模型，能减少两边盲点重合。如果审核无法访问仓库，就自己提供任务的两段文本、`git diff <基线>..goal-driven/<任务名>`（基线 HEAD 见 `state.md`）和 `state.md`；diff 太大时，先发 `git diff --stat`，再按它的要求逐个文件补充。
 
@@ -105,7 +105,7 @@ Master 输出 `SUCCESS: ALL CRITERIA MET` 后，在能读取仓库、能运行 `
 
 如果改在新对话里生成，要把这一串任务里之前每个任务的两段文本也贴进去。
 
-然后停在上一个 `goal-driven/*` 分支上，把后续任务发给 Master。它问是否叠在这个分支上时，选叠加。重复审核和后续任务，直到审核通过。
+然后停在上一个 `goal-driven/*` 分支上，把后续任务发给 Master，它会从这个分支新建分支。重复审核和后续任务，直到审核通过。
 
 ### 7. 合并与清理
 
@@ -124,15 +124,13 @@ git branch -D goal-driven/<任务名>    # 这一串里的每个分支
 
 ## Worker 示例
 
-Master 使用哪个 Worker，由 `Goal-Driven.md` 顶部的 `Worker command`、`Worker report`、`Worker retryable` 和 `Worker resume` 四行决定，任务文本不负责选择。要换命令行工具或模型，替换这四行即可。`Worker retryable` 描述哪些 Worker 报告属于基础设施的瞬时故障；遇到这类失败，Master 直接派下一轮，不把它当作方法失败。`Worker resume` 给出在下一轮接续被中断会话的参数；没有它时，下一轮派全新 Worker。工具没有这类故障或选项时，对应一行写 `none`。启动脚本会在命令末尾追加 `-p <提示词>`，所以该工具必须支持这种用法。输出要保持流式：日志不再增长时，`poll` 会把 Worker 视为空闲。
+Master 使用哪个 Worker，由 `Goal-Driven.md` 顶部的 `Worker command` 和 `Worker report` 两行决定，任务文本不负责选择。要换命令行工具或模型，替换这两行即可。启动脚本会在命令末尾追加 `-p <提示词>`，所以该工具必须支持这种用法。
 
 agy（默认）：
 
 ```text
 Worker command: `agy --model gemini-3.8-flash --effort high --dangerously-skip-permissions --output-format stream-json`
 Worker report: the last `{"event":"result"}` line; `result.status` and `result.response`.
-Worker retryable: `result.status` is `ERROR` and `result.error` contains `UNAUTHENTICATED (code 401)`.
-Worker resume: `--conversation <result.conversation_id>`
 ```
 
 pi：
@@ -140,8 +138,6 @@ pi：
 ```text
 Worker command: `pi -a --model llama-local/qwen3.8-27b --mode json`
 Worker report: the last `{"type":"turn_end"}` line; the text in `message.content`.
-Worker retryable: none.
-Worker resume: none.
 ```
 
 cursor：
@@ -149,8 +145,6 @@ cursor：
 ```text
 Worker command: `agent --model grok-4.7-xhigh --force --print --output-format stream-json`
 Worker report: the last `{"type":"result"}` line; `is_error` and `result`.
-Worker retryable: none.
-Worker resume: none.
 ```
 
 ## 任务目录结构
@@ -159,9 +153,8 @@ Worker resume: none.
 .git/goal-driven/<任务名>/
 ├── <baseline>      # HEAD、stash 列表、status、diff、原始分支（文件名由 Master 决定）
 ├── task.md         # 一字不差的任务两段文本
-├── rules.md        # 本任务使用的 Goal-Driven.md 副本
 ├── state.md        # 目标、状态、检查点、Criteria、失败过的方案
-├── launch.* poll.* verify.* review.*  # 按 Master 的 shell 从 scripts/ 复制的脚本（.sh 或 .ps1）
+├── launch.* poll.* verify.*  # 按 Master 的 shell 从 scripts/ 复制的脚本（.sh 或 .ps1）
 └── logs/
     ├── round-<N>-prompt.md     # 本轮 Worker Prompt
     ├── round-<N>-worker.pid    # Worker 包装进程 PID，修改时间即启动时间
