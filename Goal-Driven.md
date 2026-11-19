@@ -11,7 +11,7 @@ enter Goal-Driven mode.
 
 Scripts directory: `<path-to-goal-driven>/scripts` (set once to the absolute path of this repository's `scripts/`).
 
-Worker command: `agy --model gemini-3.8-flash --effort high --dangerously-skip-permissions --output-format stream-json`
+Worker command: `agy --model gemini-3.8-flash --effort high --dangerously-skip-permissions --output-format stream-json -p`
 
 Worker report: the last `{"event":"result"}` line; `result.status` and `result.response`.
 
@@ -113,7 +113,7 @@ Locate the Worker's final report in its log as stated by Worker report.
 
 ### Detached Launch
 
-Write the Worker Prompt to `logs/round-<N>-prompt.md` in the task directory, then launch from the repository root. `<worker args>` is the Worker command; the script appends `-p` and the prompt.
+Write the Worker Prompt to `logs/round-<N>-prompt.md` in the task directory, then launch from the repository root. `<worker args>` is the Worker command; the script appends the prompt.
 
 ```text
 bash .git/goal-driven/<task>/launch.sh <N> <worker args>

@@ -124,19 +124,26 @@ git branch -D goal-driven/<任务名>    # 这一串里的每个分支
 
 ## Worker 示例
 
-Master 使用哪个 Worker，由 `Goal-Driven.md` 顶部的 `Worker command` 和 `Worker report` 两行决定，任务文本不负责选择。要换命令行工具或模型，替换这两行即可。启动脚本会在命令末尾追加 `-p <提示词>`，所以该工具必须支持这种用法。
+Master 使用哪个 Worker，由 `Goal-Driven.md` 顶部的 `Worker command` 和 `Worker report` 两行决定，任务文本不负责选择。要换命令行工具或模型，替换这两行即可。启动脚本会在命令末尾追加 `<提示词>`；需要 `-p` 等提示词参数标志的工具，将该标志写在 `Worker command` 末尾。
 
 agy（默认）：
 
 ```text
-Worker command: `agy --model gemini-3.8-flash --effort high --dangerously-skip-permissions --output-format stream-json`
+Worker command: `agy --model gemini-3.8-flash --effort high --dangerously-skip-permissions --output-format stream-json -p`
 Worker report: the last `{"event":"result"}` line; `result.status` and `result.response`.
+```
+
+codex：
+
+```text
+Worker command: `codex exec --model gpt-6.2-sol --config model_reasoning_effort=high --dangerously-bypass-approvals-and-sandbox --json`
+Worker report: the last `{"type":"item.completed"}` line with `item.type` `"agent_message"`; `item.text`.
 ```
 
 pi：
 
 ```text
-Worker command: `pi -a --model llama-local/qwen3.8-27b --mode json`
+Worker command: `pi -a --model llama-local/qwen3.8-27b --mode json -p`
 Worker report: the last `{"type":"turn_end"}` line; the text in `message.content`.
 ```
 

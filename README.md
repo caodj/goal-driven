@@ -124,19 +124,26 @@ If a baseline uncommitted change touches a file the task also changed, `git swit
 
 ## Worker examples
 
-The Master runs the Worker given by the `Worker command` and `Worker report` lines at the top of `Goal-Driven.md`; the task block does not choose it. To use another CLI or model, replace those two lines. The launch script appends `-p <prompt>` to the command, so the CLI must accept it.
+The Master runs the Worker given by the `Worker command` and `Worker report` lines at the top of `Goal-Driven.md`; the task block does not choose it. To use another CLI or model, replace those two lines. The launch script appends `<prompt>` to the command, so include any prompt flag (such as `-p`) at the end of `Worker command`.
 
 agy (default):
 
 ```text
-Worker command: `agy --model gemini-3.8-flash --effort high --dangerously-skip-permissions --output-format stream-json`
+Worker command: `agy --model gemini-3.8-flash --effort high --dangerously-skip-permissions --output-format stream-json -p`
 Worker report: the last `{"event":"result"}` line; `result.status` and `result.response`.
+```
+
+codex:
+
+```text
+Worker command: `codex exec --model gpt-6.2-sol --config model_reasoning_effort=high --dangerously-bypass-approvals-and-sandbox --json`
+Worker report: the last `{"type":"item.completed"}` line with `item.type` `"agent_message"`; `item.text`.
 ```
 
 pi:
 
 ```text
-Worker command: `pi -a --model llama-local/qwen3.8-27b --mode json`
+Worker command: `pi -a --model llama-local/qwen3.8-27b --mode json -p`
 Worker report: the last `{"type":"turn_end"}` line; the text in `message.content`.
 ```
 
