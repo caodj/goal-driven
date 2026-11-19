@@ -129,7 +129,7 @@ Master 使用哪个 Worker，由 `Goal-Driven.md` 顶部的 `Worker command` 和
 agy（默认）：
 
 ```text
-Worker command: `agy --model gemini-3.8-flash --effort high --dangerously-skip-permissions --output-format stream-json -p`
+Worker command: `agy --model gemini-4-neon-high --dangerously-skip-permissions --output-format stream-json -p`
 Worker report: the last `{"event":"result"}` line; `result.status` and `result.response`.
 ```
 

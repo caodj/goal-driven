@@ -129,7 +129,7 @@ The Master runs the Worker given by the `Worker command` and `Worker report` lin
 agy (default):
 
 ```text
-Worker command: `agy --model gemini-3.8-flash --effort high --dangerously-skip-permissions --output-format stream-json -p`
+Worker command: `agy --model gemini-4-neon-high --dangerously-skip-permissions --output-format stream-json -p`
 Worker report: the last `{"event":"result"}` line; `result.status` and `result.response`.
 ```
 
